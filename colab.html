@@ -672,6 +672,10 @@ function viewEstoque(focusScan=true){
       <button class="btn" id="addProd">+ Cadastrar / dar entrada</button>
       <button class="btn ghost" id="goAjuste">± Ajuste de estoque</button>
       <button class="btn ghost" id="goCats">+ Nova categoria</button>
+      <button class="btn ghost" id="estPrint" title="Imprime a lista como está filtrada">
+        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px;margin-right:4px"><path d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>Imprimir</button>
+      <button class="btn ghost" id="estXlsx" title="Baixa a lista como está filtrada em planilha Excel">
+        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px;margin-right:4px"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>Baixar Excel</button>
       <div style="margin-left:auto;font-size:12.5px;color:var(--muted)">
         <span class="lock"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>Alterar preço de venda exige senha do administrador</span>
       </div>
@@ -730,6 +734,8 @@ function viewEstoque(focusScan=true){
   $("#goAjuste").addEventListener("click",()=>modalAjuste());
   $("#goCats").addEventListener("click",()=>guardAdmin(()=>modalCategorias(),"Criar categorias é permitido apenas com a senha do administrador."));
   $("#addProd").addEventListener("click",()=>modalProduto());
+  $("#estPrint").addEventListener("click",()=>imprimirEstoque(lista.map(x=>x.p),isAdmin,ativo));
+  $("#estXlsx").addEventListener("click",()=>excelEstoque(lista.map(x=>x.p),isAdmin));
   [["ef_q","q","input"],["ef_ean","ean","input"],["ef_cor","cor","change"],["ef_tam","tam","change"],["ef_cat","cat","change"],["ef_forn","forn","change"],["ef_sit","sit","change"]]
     .forEach(([id,k,ev])=>$("#"+id).addEventListener(ev,e=>{EF[k]=e.target.value;ESTQ_HL=null;rerender(()=>viewEstoque(false));}));
   $("#ef_clear")?.addEventListener("click",()=>{EF=novoEF();viewEstoque();});
@@ -761,6 +767,67 @@ function editPrice(i){
     const v=parseFloat($("#npreco").value); if(isNaN(v)||v<=0)return;
     ESTOQUE[i].preco=v; closeModal(); viewEstoque(); toast("Preço atualizado.");
   });
+}
+
+/* Estoque: impressão e exportação Excel (usam a lista como está filtrada na tela) */
+const filtrosEstoqueTxt=()=>{
+  const l={q:"Busca",ean:"Cód. barras",cor:"Cor",tam:"Tam.",cat:"Categoria",forn:"Fornecedor",sit:"Situação"};
+  return Object.entries(EF).filter(([,v])=>v).map(([k,v])=>`${l[k]}: ${k==="sit"&&v==="alerta"?"Baixo + esgotado":v}`).join(" · ");
+};
+function imprimirEstoque(itens,isAdmin,ativo){
+  if(!itens.length) return toast("Nada para imprimir com esses filtros.");
+  const agora=new Date().toLocaleString("pt-BR",{dateStyle:"short",timeStyle:"short"});
+  const pecas=itens.reduce((s,p)=>s+p.qtd,0), totCusto=itens.reduce((s,p)=>s+p.qtd*p.custo,0), totVenda=itens.reduce((s,p)=>s+p.qtd*p.preco,0);
+  const html=`<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Estoque — COLAB</title><style>
+    @page{size:A4 landscape;margin:12mm}
+    body{font-family:Arial,Helvetica,sans-serif;color:#111;font-size:10.5px;margin:0}
+    h1{font-size:16px;margin:0 0 2px}.meta{color:#555;margin-bottom:10px}
+    table{width:100%;border-collapse:collapse}th,td{border-bottom:1px solid #ccc;padding:4px 5px;text-align:left;vertical-align:top}
+    th{background:#eee;font-size:10px;text-transform:uppercase}thead{display:table-header-group}tr{page-break-inside:avoid}
+    .n{text-align:right;white-space:nowrap}.sku{color:#666;font-size:9.5px}tfoot td{font-weight:700;border-top:2px solid #111;border-bottom:0}
+    .crit{color:#b00020;font-weight:700}.warn{color:#9a6200;font-weight:700}
+  </style></head><body>
+    <h1>COLAB Clothing — Estoque</h1>
+    <div class="meta">Emitido em ${agora} por ${esc(SESSION.name)} · ${itens.length} produto(s) · ${n0(pecas)} peça(s)${ativo?`<br>Filtros: ${esc(filtrosEstoqueTxt())}`:""}</div>
+    <table><thead><tr><th>Produto</th><th>Cód. barras</th><th>Cor</th><th>Tam.</th><th>Categoria</th><th>Fornecedor</th>${isAdmin?'<th class="n">Custo</th>':""}<th class="n">Preço venda</th><th class="n">Estoque</th><th>Situação</th></tr></thead>
+    <tbody>${itens.map(p=>{const s=situacao(p);return `<tr><td><b>${esc(p.nome)}</b><div class="sku">${esc(p.sku)}</div></td><td>${esc(p.ean||"—")}</td><td>${esc(p.cor||"—")}</td><td>${esc(p.tam||"—")}</td><td>${esc(p.cat)}</td><td>${esc(fornDe(p)||"—")}</td>${isAdmin?`<td class="n">${brl(p.custo)}</td>`:""}<td class="n">${brl(p.preco)}</td><td class="n">${p.qtd}</td><td class="${s==="Esgotado"?"crit":s==="Baixo"?"warn":""}">${s}</td></tr>`;}).join("")}</tbody>
+    <tfoot><tr><td colspan="6">Total</td>${isAdmin?`<td class="n">${brl(totCusto)}</td>`:""}<td class="n">${brl(totVenda)}</td><td class="n">${n0(pecas)}</td><td></td></tr></tfoot></table>
+  </body></html>`;
+  const fr=document.createElement("iframe");
+  fr.style.cssText="position:fixed;right:0;bottom:0;width:0;height:0;border:0";
+  document.body.appendChild(fr);
+  fr.contentDocument.open(); fr.contentDocument.write(html); fr.contentDocument.close();
+  setTimeout(()=>{fr.contentWindow.focus(); fr.contentWindow.print(); setTimeout(()=>fr.remove(),1000);},150);
+}
+let _xlsxLib=null;
+const carregaXlsx=()=>_xlsxLib||(_xlsxLib=new Promise((ok,erro)=>{
+  if(window.XLSX) return ok(window.XLSX);
+  const s=document.createElement("script");
+  s.src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js";
+  s.onload=()=>ok(window.XLSX); s.onerror=()=>{_xlsxLib=null;erro(new Error("xlsx"));};
+  document.head.appendChild(s);
+}));
+async function excelEstoque(itens,isAdmin){
+  if(!itens.length) return toast("Nada para exportar com esses filtros.");
+  toast("Gerando planilha…");
+  let X; try{ X=await carregaXlsx(); }catch(e){ return toast("Não foi possível gerar o Excel. Verifique a internet."); }
+  const cab=["Produto","Código","Cód. barras","Cor","Tamanho","Categoria","Fornecedor",...(isAdmin?["Custo (R$)"]:[]),"Preço venda (R$)","Estoque","Estoque mín.","Situação",...(isAdmin?["Total custo (R$)"]:[]),"Total venda (R$)"];
+  const linhas=itens.map(p=>[p.nome,p.sku,p.ean||"",p.cor||"",p.tam||"",p.cat||"",fornDe(p)||"",...(isAdmin?[p.custo]:[]),p.preco,p.qtd,p.min??"",situacao(p),...(isAdmin?[p.qtd*p.custo]:[]),p.qtd*p.preco]);
+  const tot=["TOTAL","","","","","","",...(isAdmin?[""]:[]),"",itens.reduce((s,p)=>s+p.qtd,0),"","",...(isAdmin?[itens.reduce((s,p)=>s+p.qtd*p.custo,0)]:[]),itens.reduce((s,p)=>s+p.qtd*p.preco,0)];
+  const ws=X.utils.aoa_to_sheet([cab,...linhas,[],tot]);
+  // códigos de barras como texto (sem notação científica) e valores em R$
+  const moeda=new Set(cab.map((c,i)=>c.includes("R$")?i:-1).filter(i=>i>=0));
+  for(let r=1;r<=linhas.length+2;r++) cab.forEach((c,ci)=>{
+    const cel=ws[X.utils.encode_cell({r,c:ci})]; if(!cel) return;
+    if(ci===2&&cel.v!==""){cel.t="s";cel.v=String(cel.v);}
+    if(moeda.has(ci)&&cel.t==="n") cel.z='"R$" #,##0.00';
+  });
+  ws["!cols"]=cab.map((c,i)=>({wch:i===0?32:Math.max(c.length+2,12)}));
+  ws["!autofilter"]={ref:X.utils.encode_range({s:{r:0,c:0},e:{r:linhas.length,c:cab.length-1}})};
+  const wb=X.utils.book_new(); X.utils.book_append_sheet(wb,ws,"Estoque");
+  const d=new Date(), dd=n=>String(n).padStart(2,"0");
+  X.writeFile(wb,`estoque-colab-${d.getFullYear()}-${dd(d.getMonth()+1)}-${dd(d.getDate())}.xlsx`);
+  toast(`Planilha baixada: ${itens.length} produto(s).`);
 }
 
 /* Entradas: relatório (lançamentos são feitos em Estoque → Cadastrar / dar entrada) */
