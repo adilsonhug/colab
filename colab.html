@@ -215,9 +215,10 @@ tfoot td{padding:11px 14px;border-top:2px solid var(--border);background:var(--s
 .modal.compact .g2{grid-template-columns:1fr 2fr}
 .modal.compact .g3{grid-template-columns:1fr 1.3fr 1fr}
 .modal.compact .g5{grid-template-columns:repeat(5,1fr)}
+.modal.compact .g4{grid-template-columns:repeat(4,1fr)}
 .modal.compact .mk-calc{margin-top:0}
 .modal.compact .chk{margin-top:0}
-@media (max-width:640px){.modal.compact .g2,.modal.compact .g3{grid-template-columns:1fr}.modal.compact .g5{grid-template-columns:1fr 1fr}}
+@media (max-width:640px){.modal.compact .g2,.modal.compact .g3{grid-template-columns:1fr}.modal.compact .g5,.modal.compact .g4{grid-template-columns:1fr 1fr}}
 
 @media (max-width:860px){
   #app{grid-template-columns:1fr}
@@ -248,8 +249,7 @@ tfoot td{padding:11px 14px;border-top:2px solid var(--border);background:var(--s
       <input class="inp" type="password" id="pw" placeholder="Digite sua senha" autocomplete="off">
       <div class="hint" id="pwHint"></div>
     </div>
-    <button class="btn" type="submit">Entrar</button>
-    <div class="hint">Protótipo de demonstração. Senhas de teste aparecem acima ao escolher o usuário.</div>
+    <button class="btn" type="submit" id="loginBtn">Entrar</button>
   </form>
 </div>
 
@@ -269,7 +269,6 @@ tfoot td{padding:11px 14px;border-top:2px solid var(--border);background:var(--s
   <main>
     <div class="topbar">
       <h2 id="pageTitle">Painel</h2>
-      <span class="demo-tag">Dados de exemplo</span>
       <button class="icon-btn" id="theme" title="Tema">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
       </button>
@@ -284,12 +283,8 @@ tfoot td{padding:11px 14px;border-top:2px solid var(--border);background:var(--s
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script>
 /* ---------------- DADOS DE EXEMPLO (de outubro/2026) ---------------- */
-let USERS=[
-  {id:"fabiola",name:"Fabiola",role:"admin",pw:"admin123",desc:"Administradora",com:0,ativo:true,demo:true},
-  {id:"oliver",name:"Oliver",role:"func",pw:"1234",desc:"Vendedor",com:3,ativo:true,demo:true},
-  {id:"func2",name:"Funcionário 2",role:"func",pw:"1234",desc:"Vendedor",com:3,ativo:true,demo:true},
-];
-const isAdminPw=pw=>USERS.some(u=>u.role==="admin"&&u.ativo&&u.pw===pw);
+// usuários vêm do banco depois do login; as senhas ficam só no servidor (tabela "senhas", embaralhadas)
+let USERS=[];
 
 // Faturamento diário do mês (aba FECHAMENTO)
 // Mês corrente (o DIARIO abaixo é dele)
@@ -391,6 +386,13 @@ function dfBind(px,getF,re){
   ["ano","mes","dia"].forEach(k=>$("#"+px+"_"+k)?.addEventListener("change",e=>{const f=getF(); f[k]=e.target.value;
     if(k==="ano"){f.mes="";f.dia="";} if(k==="mes")f.dia=""; re();}));
 }
+/* filtro de período (de / até) para históricos gravados como "dd/mm/aaaa, hh:mm" */
+const brISO=s=>{const m=/^(\d{2})\/(\d{2})\/(\d{4})/.exec(s||""); return m?`${m[3]}-${m[2]}-${m[1]}`:String(s||"").slice(0,10);};
+const pfMatch=(s,f)=>{const d=brISO(s); return (!f.de||d>=f.de)&&(!f.ate||d<=f.ate);};
+const pfHTML=(px,f)=>`<div class="field"><label>De</label><input class="inp" type="date" id="${px}_de" value="${f.de}"></div>
+  <div class="field"><label>Até</label><input class="inp" type="date" id="${px}_ate" value="${f.ate}"></div>`;
+const pfTxt=(f,extra=[])=>[f.de&&`de ${fmtDate(f.de)}`,f.ate&&`até ${fmtDate(f.ate)}`,...extra].filter(Boolean).join(" · ");
+const ICO_PRINT='<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px;margin-right:4px"><path d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>';
 /* faturamento por mês: histórico + mês corrente (DIARIO) */
 function fatMensal(){ return {...HIST,[MES_ATUAL]:+DIARIO.reduce((a,b)=>a+b,0).toFixed(2)}; }
 function somaFaturamento(iso,valor,tipo,frete){
@@ -424,21 +426,27 @@ const payIcon=p=>({"Pix":"#1f9d63","Dinheiro":"#c07c00","Cartão crédito":"#e02
 function toast(msg){const t=$("#toast");t.textContent=msg;t.classList.add("show");clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove("show"),2200);}
 
 /* ---------------- LOGIN ---------------- */
-let pickUser=USERS[0].id;
+let LOGIN_USERS=[], pickUser=null; // lista pública (só nome e cargo), vinda de lista_login()
 function renderPills(){
-  if(!USERS.some(u=>u.id===pickUser&&u.ativo)) pickUser=USERS.find(u=>u.ativo).id;
-  $("#userPills").innerHTML=USERS.filter(u=>u.ativo).map(u=>`<button type="button" data-u="${u.id}" class="${u.id===pickUser?'on':''}">
-    ${u.name}<span>${u.desc}</span></button>`).join("");
-  const u=USERS.find(x=>x.id===pickUser);
-  $("#pwHint").textContent=u.demo?"Senha de teste: "+u.pw:"";
+  if(!LOGIN_USERS.length){ $("#userPills").innerHTML='<span class="hint">Carregando usuários…</span>'; return; }
+  if(!LOGIN_USERS.some(u=>u.id===pickUser)) pickUser=LOGIN_USERS[0].id;
+  $("#userPills").innerHTML=LOGIN_USERS.map(u=>`<button type="button" data-u="${esc(u.id)}" class="${u.id===pickUser?'on':''}">
+    ${esc(u.name)}<span>${esc(u.desc||"")}</span></button>`).join("");
 }
 renderPills();
-$("#userPills").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;pickUser=b.dataset.u;renderPills();});
-$("#loginForm").addEventListener("submit",e=>{
+$("#userPills").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;pickUser=b.dataset.u;renderPills();$("#pw").focus();});
+$("#loginForm").addEventListener("submit",async e=>{
   e.preventDefault();
-  const u=USERS.find(x=>x.id===pickUser);
-  if($("#pw").value!==u.pw){$("#pwHint").textContent="Senha incorreta."+(u.demo?" Teste: "+u.pw:"");return;}
-  SESSION=u; startApp();
+  if(!pickUser||!window.DB) return;
+  const btn=$("#loginBtn"); btn.disabled=true; $("#pwHint").textContent="Entrando…";
+  try{
+    await DB.entrar(pickUser,$("#pw").value);
+    SESSION=USERS.find(u=>u.id===pickUser);
+    if(!SESSION) throw new Error("login_invalido");
+    $("#pw").value=""; $("#pwHint").textContent=""; startApp();
+  }catch(err){
+    $("#pwHint").textContent=/login_invalido/.test(err.message)?"Usuário ou senha incorretos.":"Não foi possível entrar: "+err.message;
+  }finally{ btn.disabled=false; }
 });
 
 /* ---------------- NAV ---------------- */
@@ -467,7 +475,7 @@ function startApp(){
   $("#uAv").textContent=SESSION.name[0].toUpperCase();
   renderNav(); route();
 }
-$("#logout").addEventListener("click",()=>{location.reload();});
+$("#logout").addEventListener("click",async()=>{ try{ await window.DB?.sair(); }catch(e){} location.reload(); });
 $("#theme").addEventListener("click",()=>{
   const cur=document.documentElement.getAttribute("data-theme");
   const isDark=cur?cur==="dark":matchMedia("(prefers-color-scheme:dark)").matches;
@@ -646,7 +654,20 @@ const novoEF=()=>({q:"",ean:"",cor:"",tam:"",cat:"",forn:"",sit:""});
 // fornecedor do produto: o do cadastro ou o da última entrada
 const fornDe=p=>p.forn||(ENTRADAS.filter(e=>e.sku===p.sku&&e.forn&&e.forn!=="—").sort((a,b)=>b.data.localeCompare(a.data))[0]||{}).forn||"";
 let EF=novoEF(), ESTQ_HL=null;
-function viewEstoque(focusScan=true){
+const novoAJF=()=>({de:"",ate:"",motivo:"",user:""});
+let AJF=novoAJF();
+function imprimirAjustes(lista,ativo){
+  if(!lista.length) return toast("Nada para imprimir com esses filtros.");
+  const soma=lista.reduce((s,a)=>s+(a.depois-a.antes),0);
+  imprimirRelatorio("Ajustes de estoque",`
+    <div class="meta">Emitido em ${agoraStr()} por ${esc(SESSION.name)} · ${lista.length} ajuste(s)${ativo?`<br>Filtros: ${esc(pfTxt(AJF,[AJF.motivo&&`motivo ${AJF.motivo}`,AJF.user&&`feito por ${AJF.user}`]))}`:""}</div>
+    <table><thead><tr><th>Data</th><th>Produto</th><th>Motivo</th><th>Observação</th><th class="n">Antes</th><th class="n">Ajuste</th><th class="n">Depois</th><th>Feito por</th></tr></thead>
+    <tbody>${lista.map(a=>{const d=a.depois-a.antes;return `<tr><td>${esc(a.data)}</td><td><b>${esc(a.nome)}</b><div class="sku">${esc(a.sku)}</div></td><td>${esc(a.motivo)}</td><td>${esc(a.obs||"")}</td>
+      <td class="n">${a.antes}</td><td class="n ${d<0?"crit":"warn"}">${d>0?"+":""}${d}</td><td class="n">${a.depois}</td>
+      <td>${esc(a.user)}${a.autor&&a.autor!==a.user?`<div class="sku">aut.: ${esc(a.autor)}</div>`:""}</td></tr>`;}).join("")}</tbody>
+    <tfoot><tr><td colspan="5">Saldo dos ajustes</td><td class="n">${soma>0?"+":""}${soma}</td><td colspan="2"></td></tr></tfoot></table>`);
+}
+function viewEstoque(){
   const isAdmin=SESSION.role==="admin";
   const q=EF.q.toLowerCase();
   const lista=ESTOQUE.map((p,i)=>({p,i})).filter(({p})=>
@@ -656,28 +677,21 @@ function viewEstoque(focusScan=true){
   const ativo=Object.values(EF).some(Boolean);
   const pecas=lista.reduce((s,{p})=>s+p.qtd,0), totCusto=lista.reduce((s,{p})=>s+p.qtd*p.custo,0), totVenda=lista.reduce((s,{p})=>s+p.qtd*p.preco,0);
   const uniq=k=>[...new Set(ESTOQUE.map(p=>p[k]).filter(Boolean))].sort((a,b)=>String(a).localeCompare(String(b),"pt-BR",{numeric:true}));
-  const ncol=isAdmin?10:9;
+  const ncol=isAdmin?11:10;
+  const ajLista=AJUSTES.filter(a=>pfMatch(a.data,AJF)&&(!AJF.motivo||a.motivo===AJF.motivo)&&(!AJF.user||a.user===AJF.user));
+  const ajAtivo=Object.values(AJF).some(Boolean);
   const fornsE=[...new Set(ESTOQUE.map(fornDe).filter(Boolean))].sort((a,b)=>a.localeCompare(b,"pt-BR"));
   $("#view").innerHTML=`
   <div class="section">
-    <div class="card" style="margin-bottom:14px"><div class="card-b">
-      <form id="scanForm" class="scanbar">
-        <span class="scan-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2M7 8v8M10 8v8M13 8v8M17 8v8"/></svg></span>
-        <input class="inp" id="scanInp" inputmode="numeric" autocomplete="off" placeholder="Bipe ou digite o código de barras">
-        <button class="btn" type="submit">Buscar</button>
-      </form>
-      <div class="hint" style="margin-top:8px">Leitor de código de barras USB/Bluetooth funciona direto neste campo. Se o código não existir, abre o cadastro já preenchido.</div>
-    </div></div>
     <div class="toolbar">
       <button class="btn" id="addProd">+ Cadastrar / dar entrada</button>
-      <button class="btn ghost" id="goAjuste">± Ajuste de estoque</button>
       <button class="btn ghost" id="goCats">+ Nova categoria</button>
       <button class="btn ghost" id="estPrint" title="Imprime a lista como está filtrada">
         <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px;margin-right:4px"><path d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>Imprimir</button>
       <button class="btn ghost" id="estXlsx" title="Baixa a lista como está filtrada em planilha Excel">
         <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px;margin-right:4px"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>Baixar Excel</button>
       <div style="margin-left:auto;font-size:12.5px;color:var(--muted)">
-        <span class="lock"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>Alterar preço de venda exige senha do administrador</span>
+        <span class="lock"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>Alterar preço ou quantidade exige senha do administrador</span>
       </div>
     </div>
     <div class="sumtiles">
@@ -688,7 +702,7 @@ function viewEstoque(focusScan=true){
       ${isAdmin?`<div class="tile"><div class="lbl">Lucro potencial</div><div class="val tnum">${brl(totVenda-totCusto)}</div><div class="sub">${totVenda?Math.round((totVenda-totCusto)/totVenda*100):0}% de margem</div></div>`:""}
     </div>
     <div class="card"><div class="card-b pad0"><div class="tw"><table>
-      <thead><tr><th>Produto</th><th>Cód. barras</th><th>Cor</th><th>Tam.</th><th>Categoria</th><th>Fornecedor</th>${isAdmin?'<th class="num">Custo</th>':''}<th class="num">Preço venda</th><th class="num">Estoque</th><th>Situação</th></tr>
+      <thead><tr><th>Produto</th><th>Cód. barras</th><th>Cor</th><th>Tam.</th><th>Categoria</th><th>Fornecedor</th>${isAdmin?'<th class="num">Custo</th>':''}<th class="num">Preço venda</th><th class="num">Estoque</th><th>Situação</th><th></th></tr>
       <tr class="fil">
         <th><input class="inp" id="ef_q" placeholder="Nome ou código" value="${esc(EF.q)}"></th>
         <th><input class="inp" id="ef_ean" placeholder="Cód. barras" value="${esc(EF.ean)}" style="width:110px"></th>
@@ -697,7 +711,7 @@ function viewEstoque(focusScan=true){
         <th>${optSel("ef_cat",CATEGORIAS.filter(c=>ESTOQUE.some(p=>p.cat===c)),EF.cat,"Todas")}</th>
         <th>${optSel("ef_forn",fornsE,EF.forn)}</th>
         ${isAdmin?"<th></th>":""}<th></th><th></th>
-        <th>${optSel("ef_sit",[["OK","OK"],["Baixo","Baixo"],["Esgotado","Esgotado"],["alerta","Baixo + esgotado"]],EF.sit)}</th>
+        <th>${optSel("ef_sit",[["OK","OK"],["Baixo","Baixo"],["Esgotado","Esgotado"],["alerta","Baixo + esgotado"]],EF.sit)}</th><th></th>
       </tr></thead>
       <tbody>${lista.length?lista.map(({p,i})=>{
         const st=p.qtd===0?["stock-out","Esgotado","crit"]:p.qtd<=p.min?["stock-low","Baixo","warn"]:["stock-ok","OK","good"];
@@ -709,29 +723,40 @@ function viewEstoque(focusScan=true){
           <td>${esc(p.cat)}</td>
           <td>${esc(fornDe(p)||"—")}</td>
           ${isAdmin?`<td class="num tnum">${brl(p.custo)}</td>`:""}
-          <td class="num tnum"><span data-price="${i}" style="display:inline-flex;align-items:center;gap:7px;justify-content:flex-end">
-            ${brl(p.preco)}
-            <button class="icon-btn" style="width:28px;height:28px" data-editprice="${i}" title="Alterar preço">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg></button></span></td>
+          <td class="num tnum">${brl(p.preco)}</td>
           <td class="num tnum ${st[0]}">${p.qtd}</td>
-          <td><span class="chip ${st[2]}">${st[1]}</span></td></tr>`;
+          <td><span class="chip ${st[2]}">${st[1]}</span></td>
+          <td style="text-align:right"><button class="icon-btn" style="width:30px;height:30px" data-editprod="${i}" title="Editar produto">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg></button></td></tr>`;
       }).join(""):`<tr><td colspan="${ncol}" style="text-align:center;color:var(--muted);padding:24px">${ESTOQUE.length?"Nenhum produto com esses filtros.":"Estoque vazio. Lance os produtos pela aba Importar nota ou em + Cadastrar / dar entrada."}</td></tr>`}</tbody>
       <tfoot><tr>
         <td colspan="6" style="font-weight:700">Total ${ativo?"filtrado":"em estoque"} <span class="hint" style="font-weight:500">· valores × quantidade</span>
           ${ativo?`<button class="btn ghost sm" id="ef_clear" style="margin-left:8px">Limpar filtros</button>`:""}</td>
         ${isAdmin?`<td class="num tnum" style="font-weight:800">${brl(totCusto)}</td>`:""}
         <td class="num tnum" style="font-weight:800">${brl(totVenda)}</td>
-        <td class="num tnum" style="font-weight:800">${n0(pecas)}</td><td></td></tr></tfoot>
+        <td class="num tnum" style="font-weight:800">${n0(pecas)}</td><td></td><td></td></tr></tfoot>
     </table></div></div></div>
-    ${AJUSTES.length?`<div class="card" style="margin-top:16px"><div class="card-h"><h3>Ajustes de estoque</h3><span class="hint">autorizados com senha do administrador</span></div>
+    ${AJUSTES.length?`<div class="card" style="margin-top:16px" id="ajCard"><div class="card-h"><h3>Ajustes de estoque</h3><span class="hint">autorizados com senha do administrador</span></div>
+      <div class="card-b" style="border-bottom:1px solid var(--border)"><div class="datebar">
+        ${pfHTML("ajf",AJF)}
+        <div class="field"><label>Motivo</label>${optSel("ajf_motivo",[...new Set(AJUSTES.map(a=>a.motivo))].sort(),AJF.motivo)}</div>
+        <div class="field"><label>Feito por</label>${optSel("ajf_user",[...new Set(AJUSTES.map(a=>a.user))].sort(),AJF.user)}</div>
+        <button class="btn ghost" id="ajf_clear" ${ajAtivo?"":"disabled"} style="padding:9px 14px">Limpar filtros</button>
+        <button class="btn ghost" id="ajf_print" style="padding:9px 14px">${ICO_PRINT}Imprimir</button>
+      </div></div>
       <div class="card-b pad0"><div class="tw"><table>
       <thead><tr><th>Data</th><th>Produto</th><th>Motivo</th><th class="num">Antes</th><th class="num">Ajuste</th><th class="num">Depois</th><th>Feito por</th></tr></thead>
-      <tbody>${AJUSTES.map(a=>`<tr><td class="tnum">${a.data}</td><td><b>${esc(a.nome)}</b><div class="hint">${esc(a.sku)}${a.obs?` · ${esc(a.obs)}`:""}</div></td>
+      <tbody>${ajLista.length?ajLista.map(a=>`<tr><td class="tnum">${a.data}</td><td><b>${esc(a.nome)}</b><div class="hint">${esc(a.sku)}${a.obs?` · ${esc(a.obs)}`:""}</div></td>
         <td>${esc(a.motivo)}</td><td class="num tnum">${a.antes}</td><td class="num">${difTag(a.depois-a.antes).replace(" a mais","").replace(" a menos","")}</td>
-        <td class="num tnum">${a.depois}</td><td>${esc(a.user)}${a.autor&&a.autor!==a.user?`<div class="hint">aut.: ${esc(a.autor)}</div>`:""}</td></tr>`).join("")}</tbody>
+        <td class="num tnum">${a.depois}</td><td>${esc(a.user)}${a.autor&&a.autor!==a.user?`<div class="hint">aut.: ${esc(a.autor)}</div>`:""}</td></tr>`).join("")
+        :`<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:22px">Nenhum ajuste com esses filtros.</td></tr>`}</tbody>
       </table></div></div></div>`:""}
   </div>`;
-  $("#goAjuste").addEventListener("click",()=>modalAjuste());
+  if(AJUSTES.length){
+    ["de","ate","motivo","user"].forEach(k=>$("#ajf_"+k).addEventListener("change",e=>{AJF[k]=e.target.value;viewEstoque();}));
+    $("#ajf_clear").addEventListener("click",()=>{AJF=novoAJF();viewEstoque();});
+    $("#ajf_print").addEventListener("click",()=>imprimirAjustes(ajLista,ajAtivo));
+  }
   $("#goCats").addEventListener("click",()=>guardAdmin(()=>modalCategorias(),"Criar categorias é permitido apenas com a senha do administrador."));
   $("#addProd").addEventListener("click",()=>modalProduto());
   $("#estPrint").addEventListener("click",()=>imprimirEstoque(lista.map(x=>x.p),isAdmin,ativo));
@@ -739,33 +764,88 @@ function viewEstoque(focusScan=true){
   [["ef_q","q","input"],["ef_ean","ean","input"],["ef_cor","cor","change"],["ef_tam","tam","change"],["ef_cat","cat","change"],["ef_forn","forn","change"],["ef_sit","sit","change"]]
     .forEach(([id,k,ev])=>$("#"+id).addEventListener(ev,e=>{EF[k]=e.target.value;ESTQ_HL=null;rerender(()=>viewEstoque(false));}));
   $("#ef_clear")?.addEventListener("click",()=>{EF=novoEF();viewEstoque();});
-  $("#scanForm").addEventListener("submit",e=>{
-    e.preventDefault();
-    const code=$("#scanInp").value.trim(); if(!code)return;
-    const i=ESTOQUE.findIndex(p=>p.ean===code||p.sku.toLowerCase()===code.toLowerCase());
-    if(i>=0){
-      EF=novoEF(); ESTQ_HL=i; viewEstoque();
-      $("#row-"+i)?.scrollIntoView?.({block:"center",behavior:"smooth"});
-      toast(`${ESTOQUE[i].nome} · ${ESTOQUE[i].cor} · ${ESTOQUE[i].tam} — ${ESTOQUE[i].qtd} un.`);
-      setTimeout(()=>$("#scanInp")?.focus(),50);
-    } else {
-      modalProduto({ean:code});
-    }
-  });
-  if(focusScan&&ESTQ_HL===null) setTimeout(()=>$("#scanInp")?.focus(),50);
-  $("#view").querySelectorAll("[data-editprice]").forEach(b=>b.addEventListener("click",()=>{
-    const i=+b.dataset.editprice;
-    askAdminPw(()=>editPrice(i),`Para alterar o preço de venda de ${esc(ESTOQUE[i].nome)}, digite a senha do administrador.`);
-  }));
+  $("#view").querySelectorAll("[data-editprod]").forEach(b=>b.addEventListener("click",()=>modalEditarProduto(+b.dataset.editprod)));
 }
-function editPrice(i){
+
+/* Editar produto: dados livres; preço e quantidade exigem senha do administrador */
+function modalEditarProduto(i){
+  const p=ESTOQUE[i], isAdmin=SESSION.role==="admin";
+  const dec=v=>(+v||0).toFixed(2).replace(".",",");
+  const cores=[...new Set(ESTOQUE.map(x=>x.cor).filter(Boolean))];
+  const forns=[...new Set([...ESTOQUE.map(fornDe),...ENTRADAS.map(e=>e.forn)].filter(f=>f&&f!=="—"))];
+  const cats=CATEGORIAS.includes(p.cat)?CATEGORIAS:[p.cat,...CATEGORIAS];
   modal(`<h3><span class="perm-ico" style="background:var(--accent-soft);color:var(--accent)">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg></span>Alterar preço — ${ESTOQUE[i].nome}</h3>
-    <div class="field"><label>Novo preço de venda (R$)</label><input class="inp" id="npreco" type="number" step="0.01" value="${ESTOQUE[i].preco}"></div>
-    <div class="row"><button class="btn ghost" data-close>Cancelar</button><button class="btn" id="savePrice">Salvar preço</button></div>`);
-  $("#savePrice").addEventListener("click",()=>{
-    const v=parseFloat($("#npreco").value); if(isNaN(v)||v<=0)return;
-    ESTOQUE[i].preco=v; closeModal(); viewEstoque(); toast("Preço atualizado.");
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg></span>Editar produto</h3>
+    <div class="g g2">
+      <div class="field"><label>Código de barras <span class="req">*</span></label><input class="inp" id="e_ean" autocomplete="off" value="${esc(p.ean||"")}" style="letter-spacing:.04em"></div>
+      <div class="field"><label>Descrição do produto <span class="req">*</span></label><input class="inp" id="e_nome" value="${esc(p.nome)}"></div>
+    </div>
+    <div class="g g3">
+      <div class="field"><label>Código <span class="req">*</span></label><input class="inp" id="e_sku" value="${esc(p.sku)}" style="text-transform:uppercase"></div>
+      <div class="field"><label>Categoria</label><select class="inp" id="e_cat">${cats.map(c=>`<option ${c===p.cat?"selected":""}>${esc(c)}</option>`).join("")}</select></div>
+      <div class="field"><label>Cor <span class="req">*</span></label><input class="inp" id="e_cor" list="e_cores" value="${esc(p.cor||"")}"><datalist id="e_cores">${cores.map(c=>`<option value="${esc(c)}">`).join("")}</datalist></div>
+    </div>
+    <div class="g g2">
+      <div class="field"><label>Tamanho <span class="req">*</span></label><input class="inp" id="e_tam" value="${esc(p.tam||"")}"></div>
+      <div class="field"><label>Fornecedor</label><input class="inp" id="e_forn" list="e_forns" value="${esc(fornDe(p))}"><datalist id="e_forns">${forns.map(f=>`<option value="${esc(f)}">`).join("")}</datalist></div>
+    </div>
+    <div class="g ${isAdmin?"g4":"g3"}">
+      ${isAdmin?`<div class="field"><label>Custo (R$)</label><input class="inp" id="e_custo" inputmode="decimal" value="${dec(p.custo)}"></div>`:""}
+      <div class="field"><label>Preço de venda <span class="lock" title="Exige senha do administrador">🔒</span></label><input class="inp" id="e_preco" inputmode="decimal" value="${dec(p.preco)}"></div>
+      <div class="field"><label>Quantidade <span class="lock" title="Exige senha do administrador">🔒</span></label><input class="inp" id="e_qtd" type="number" min="0" value="${p.qtd}"></div>
+      <div class="field"><label>Estoque mín.</label><input class="inp" id="e_min" type="number" min="0" value="${p.min??0}"></div>
+    </div>
+    <div class="g g2" id="e_motbox" hidden>
+      <div class="field"><label>Motivo da mudança de quantidade</label><select class="inp" id="e_mot">
+        <option>Correção de contagem</option><option>Avaria / defeito</option><option>Perda / furto</option><option>Troca com cliente</option>
+        <option>Devolução ao fornecedor</option><option>Uso interno / brinde</option><option>Outro</option></select></div>
+      <div class="field"><label>Observação</label><input class="inp" id="e_obs" placeholder="Opcional"></div>
+    </div>
+    <div class="hint">Alterar o <b>preço de venda</b> ou a <b>quantidade</b> pede a senha do administrador. Mudanças de quantidade ficam registradas em “Ajustes de estoque”.</div>
+    <div class="err" id="e_err"></div>
+    <div class="row"><button class="btn ghost" data-close>Cancelar</button><button class="btn" id="e_save">Salvar alterações</button></div>`,"wide compact");
+  const qtdIn=()=>parseInt($("#e_qtd").value);
+  $("#e_qtd").addEventListener("input",()=>{$("#e_motbox").hidden=qtdIn()===p.qtd||isNaN(qtdIn());});
+  setTimeout(()=>$("#e_nome")?.focus(),50);
+  $("#e_save").addEventListener("click",()=>{
+    const err=m=>{$("#e_err").textContent=m;};
+    const d={nome:$("#e_nome").value.trim(), ean:$("#e_ean").value.trim(), sku:$("#e_sku").value.trim().toUpperCase(),
+      cat:$("#e_cat").value, cor:$("#e_cor").value.trim(), tam:$("#e_tam").value.trim(), forn:$("#e_forn").value.trim(),
+      custo:isAdmin?parseNum($("#e_custo").value):p.custo, preco:+(parseNum($("#e_preco").value)||NaN).toFixed(2),
+      qtd:qtdIn(), min:parseInt($("#e_min").value)};
+    if(!d.nome) return err("Informe a descrição do produto.");
+    if(d.ean!==String(p.ean||"")){ // só valida se mudou (itens importados podem ter código fora do padrão)
+      if(!d.ean) return err("Informe o código de barras.");
+      if(!/^\d{6,14}$/.test(d.ean)) return err("Código de barras deve ter só números (6 a 14 dígitos).");
+      if(ESTOQUE.some(x=>x!==p&&x.ean===d.ean)) return err("Esse código de barras já está em outro produto.");
+    }
+    if(!d.sku) return err("Informe o código do produto.");
+    if(ESTOQUE.some(x=>x!==p&&x.sku===d.sku)) return err("Esse código já existe em outro produto.");
+    if(!d.cor) return err("Informe a cor.");
+    if(!d.tam) return err("Informe o tamanho.");
+    if(isAdmin&&(isNaN(d.custo)||d.custo<0)) return err("Custo inválido.");
+    if(isNaN(d.preco)||d.preco<=0) return err("Informe o preço de venda.");
+    if(isNaN(d.qtd)||d.qtd<0) return err("A quantidade não pode ficar negativa.");
+    if(isNaN(d.min)||d.min<0) return err("Estoque mínimo inválido.");
+    const mudaPreco=Math.abs(d.preco-p.preco)>0.004, mudaQtd=d.qtd!==p.qtd;
+    const motivo=$("#e_mot").value, obs=$("#e_obs").value.trim(); // lidos antes: a tela de senha substitui este modal
+    const gravar=()=>{
+      if(d.sku!==p.sku){ // mantém histórico ligado ao produto
+        const velho=p.sku;
+        ENTRADAS.forEach(e=>{if(e.sku===velho)e.sku=d.sku;});
+        AJUSTES.forEach(a=>{if(a.sku===velho)a.sku=d.sku;});
+        VENDAS.forEach(v=>(v.itens||[]).forEach(it=>{if(it.sku===velho)it.sku=d.sku;}));
+      }
+      if(mudaQtd) AJUSTES.unshift({data:agoraStr(),sku:d.sku,nome:d.nome,motivo,obs,
+        antes:p.qtd,depois:d.qtd,user:SESSION.name,autor:isAdmin?SESSION.name:"senha admin"});
+      Object.assign(p,d);
+      closeModal(); ESTQ_HL=i; viewEstoque();
+      toast(`${p.nome} (${p.cor} · ${p.tam}) atualizado.`);
+    };
+    if(mudaPreco||mudaQtd){
+      const o=[mudaPreco&&`preço ${brl(p.preco)} → ${brl(d.preco)}`, mudaQtd&&`quantidade ${p.qtd} → ${d.qtd}`].filter(Boolean).join(" e ");
+      askAdminPw(gravar,`Confirme a alteração de ${esc(p.nome)} (${o}) com a senha do administrador.`);
+    } else gravar();
   });
 }
 
@@ -774,30 +854,36 @@ const filtrosEstoqueTxt=()=>{
   const l={q:"Busca",ean:"Cód. barras",cor:"Cor",tam:"Tam.",cat:"Categoria",forn:"Fornecedor",sit:"Situação"};
   return Object.entries(EF).filter(([,v])=>v).map(([k,v])=>`${l[k]}: ${k==="sit"&&v==="alerta"?"Baixo + esgotado":v}`).join(" · ");
 };
-function imprimirEstoque(itens,isAdmin,ativo){
-  if(!itens.length) return toast("Nada para imprimir com esses filtros.");
-  const agora=new Date().toLocaleString("pt-BR",{dateStyle:"short",timeStyle:"short"});
-  const pecas=itens.reduce((s,p)=>s+p.qtd,0), totCusto=itens.reduce((s,p)=>s+p.qtd*p.custo,0), totVenda=itens.reduce((s,p)=>s+p.qtd*p.preco,0);
-  const html=`<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Estoque — COLAB</title><style>
-    @page{size:A4 landscape;margin:12mm}
+// imprime um relatório simples (sem menus) por um iframe oculto
+function imprimirRelatorio(titulo,corpo,folha="landscape"){
+  const html=`<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>${esc(titulo)} — COLAB</title><style>
+    @page{size:A4 ${folha};margin:12mm}
     body{font-family:Arial,Helvetica,sans-serif;color:#111;font-size:10.5px;margin:0}
     h1{font-size:16px;margin:0 0 2px}.meta{color:#555;margin-bottom:10px}
     table{width:100%;border-collapse:collapse}th,td{border-bottom:1px solid #ccc;padding:4px 5px;text-align:left;vertical-align:top}
     th{background:#eee;font-size:10px;text-transform:uppercase}thead{display:table-header-group}tr{page-break-inside:avoid}
     .n{text-align:right;white-space:nowrap}.sku{color:#666;font-size:9.5px}tfoot td{font-weight:700;border-top:2px solid #111;border-bottom:0}
     .crit{color:#b00020;font-weight:700}.warn{color:#9a6200;font-weight:700}
+    .resumo{display:flex;gap:10px;margin-bottom:10px}.resumo div{border:1px solid #ccc;border-radius:6px;padding:6px 10px;min-width:110px}
+    .resumo small{display:block;color:#555;font-size:9px;text-transform:uppercase}.resumo b{font-size:14px}
+    .aviso{border:1px solid #d9a400;background:#fff8e1;border-radius:6px;padding:6px 10px;margin-top:10px}
+    .ass{margin-top:40px;display:flex;gap:40px}.ass div{flex:1;border-top:1px solid #111;padding-top:4px;text-align:center;color:#555}
   </style></head><body>
-    <h1>COLAB Clothing — Estoque</h1>
-    <div class="meta">Emitido em ${agora} por ${esc(SESSION.name)} · ${itens.length} produto(s) · ${n0(pecas)} peça(s)${ativo?`<br>Filtros: ${esc(filtrosEstoqueTxt())}`:""}</div>
-    <table><thead><tr><th>Produto</th><th>Cód. barras</th><th>Cor</th><th>Tam.</th><th>Categoria</th><th>Fornecedor</th>${isAdmin?'<th class="n">Custo</th>':""}<th class="n">Preço venda</th><th class="n">Estoque</th><th>Situação</th></tr></thead>
-    <tbody>${itens.map(p=>{const s=situacao(p);return `<tr><td><b>${esc(p.nome)}</b><div class="sku">${esc(p.sku)}</div></td><td>${esc(p.ean||"—")}</td><td>${esc(p.cor||"—")}</td><td>${esc(p.tam||"—")}</td><td>${esc(p.cat)}</td><td>${esc(fornDe(p)||"—")}</td>${isAdmin?`<td class="n">${brl(p.custo)}</td>`:""}<td class="n">${brl(p.preco)}</td><td class="n">${p.qtd}</td><td class="${s==="Esgotado"?"crit":s==="Baixo"?"warn":""}">${s}</td></tr>`;}).join("")}</tbody>
-    <tfoot><tr><td colspan="6">Total</td>${isAdmin?`<td class="n">${brl(totCusto)}</td>`:""}<td class="n">${brl(totVenda)}</td><td class="n">${n0(pecas)}</td><td></td></tr></tfoot></table>
-  </body></html>`;
+    <h1>COLAB Clothing — ${esc(titulo)}</h1>${corpo}</body></html>`;
   const fr=document.createElement("iframe");
   fr.style.cssText="position:fixed;right:0;bottom:0;width:0;height:0;border:0";
   document.body.appendChild(fr);
   fr.contentDocument.open(); fr.contentDocument.write(html); fr.contentDocument.close();
   setTimeout(()=>{fr.contentWindow.focus(); fr.contentWindow.print(); setTimeout(()=>fr.remove(),1000);},150);
+}
+function imprimirEstoque(itens,isAdmin,ativo){
+  if(!itens.length) return toast("Nada para imprimir com esses filtros.");
+  const pecas=itens.reduce((s,p)=>s+p.qtd,0), totCusto=itens.reduce((s,p)=>s+p.qtd*p.custo,0), totVenda=itens.reduce((s,p)=>s+p.qtd*p.preco,0);
+  imprimirRelatorio("Estoque",`
+    <div class="meta">Emitido em ${agoraStr()} por ${esc(SESSION.name)} · ${itens.length} produto(s) · ${n0(pecas)} peça(s)${ativo?`<br>Filtros: ${esc(filtrosEstoqueTxt())}`:""}</div>
+    <table><thead><tr><th>Produto</th><th>Cód. barras</th><th>Cor</th><th>Tam.</th><th>Categoria</th><th>Fornecedor</th>${isAdmin?'<th class="n">Custo</th>':""}<th class="n">Preço venda</th><th class="n">Estoque</th><th>Situação</th></tr></thead>
+    <tbody>${itens.map(p=>{const s=situacao(p);return `<tr><td><b>${esc(p.nome)}</b><div class="sku">${esc(p.sku)}</div></td><td>${esc(p.ean||"—")}</td><td>${esc(p.cor||"—")}</td><td>${esc(p.tam||"—")}</td><td>${esc(p.cat)}</td><td>${esc(fornDe(p)||"—")}</td>${isAdmin?`<td class="n">${brl(p.custo)}</td>`:""}<td class="n">${brl(p.preco)}</td><td class="n">${p.qtd}</td><td class="${s==="Esgotado"?"crit":s==="Baixo"?"warn":""}">${s}</td></tr>`;}).join("")}</tbody>
+    <tfoot><tr><td colspan="6">Total</td>${isAdmin?`<td class="n">${brl(totCusto)}</td>`:""}<td class="n">${brl(totVenda)}</td><td class="n">${n0(pecas)}</td><td></td></tr></tfoot></table>`);
 }
 let _xlsxLib=null;
 const carregaXlsx=()=>_xlsxLib||(_xlsxLib=new Promise((ok,erro)=>{
@@ -1035,7 +1121,7 @@ function modalUsuario(u){
     </div>
     <div class="err" id="u_err"></div>
     <div class="row"><button class="btn ghost" data-close>Cancelar</button><button class="btn" id="u_save">${novo?"Criar usuário":"Salvar"}</button></div>`,"wide");
-  $("#u_save").addEventListener("click",()=>{
+  $("#u_save").addEventListener("click",async()=>{
     const err=t=>$("#u_err").textContent=t;
     const name=$("#u_nome").value.trim(), role=$("#u_role").value, desc=$("#u_desc").value.trim()||(role==="admin"?"Administrador":"Vendedor"), com=Math.max(0,parseFloat($("#u_com").value)||0);
     if(!name) return err("Informe o nome.");
@@ -1045,7 +1131,11 @@ function modalUsuario(u){
     if(!sobraAdmin) return err("Precisa existir pelo menos um administrador ativo.");
     if(novo){
       const pw=$("#u_pw").value; if(pw.length<4) return err("A senha precisa ter pelo menos 4 caracteres.");
-      USERS.push({id:"u"+Date.now(),name,role,desc,com,pw,ativo:true});
+      const id="u"+Date.now();
+      $("#u_save").disabled=true;
+      try{ await DB.definirSenha(id,null,pw); }
+      catch(e){ $("#u_save").disabled=false; return err("Não foi possível criar a senha: "+e.message); }
+      USERS.push({id,name,role,desc,com,ativo:true});
     } else {
       if(u.id===SESSION.id&&(!ativo||role!=="admin")) return err("Você não pode desativar ou tirar o seu próprio acesso de administrador.");
       if(u.name!==name){VENDAS.forEach(v=>{if(v.vend===u.name)v.vend=name;}); COMISSAO.forEach(c=>{if(c.vend===u.name)c.vend=name;});}
@@ -1063,12 +1153,15 @@ function modalSenha(u,proprio){
     <div class="field"><label>Repita a nova senha</label><input class="inp" id="s_rep" type="password" autocomplete="new-password"></div>
     <div class="err" id="s_err"></div>
     <div class="row"><button class="btn ghost" data-close>Cancelar</button><button class="btn" id="s_ok">Salvar senha</button></div>`);
-  $("#s_ok").addEventListener("click",()=>{
+  $("#s_ok").addEventListener("click",async()=>{
     const err=t=>$("#s_err").textContent=t, n=$("#s_nova").value;
-    if(proprio&&$("#s_atual").value!==u.pw) return err("Senha atual incorreta.");
+    if(proprio&&!$("#s_atual").value) return err("Informe a senha atual.");
     if(n.length<4) return err("A nova senha precisa ter pelo menos 4 caracteres.");
     if(n!==$("#s_rep").value) return err("As senhas não conferem.");
-    u.pw=n; u.demo=false; closeModal(); toast("Senha alterada.");
+    $("#s_ok").disabled=true;
+    try{ await DB.definirSenha(u.id,proprio?$("#s_atual").value:null,n); closeModal(); toast("Senha alterada."); }
+    catch(e){ $("#s_ok").disabled=false;
+      err(/senha_atual_incorreta/.test(e.message)?"Senha atual incorreta.":/sem_permissao/.test(e.message)?"Só o administrador pode trocar a senha de outra pessoa.":"Não foi possível alterar: "+e.message); }
   });
   setTimeout(()=>($("#s_atual")||$("#s_nova")).focus(),50);
 }
@@ -1076,7 +1169,19 @@ function modalSenha(u,proprio){
 /* ---------------- MODAIS ---------------- */
 function modal(html,cls=""){ $("#modalHost").innerHTML=`<div class="modal-bg"><div class="modal ${cls}">${html}</div></div>`;
   $("#modalHost").querySelector("[data-close]")?.addEventListener("click",closeModal);
-  $("#modalHost").querySelector(".modal-bg").addEventListener("mousedown",e=>{if(e.target.classList.contains("modal-bg"))closeModal();});}
+  $("#modalHost").querySelector(".modal-bg").addEventListener("mousedown",e=>{if(e.target.classList.contains("modal-bg"))closeModal();});
+  if(cls.includes("compact")) $("#modalHost").querySelector(".modal").addEventListener("keydown",enterProximoCampo);}
+// formulários de produto: Enter pula para o próximo campo; no último, vai para o botão de salvar
+function enterProximoCampo(e){
+  const t=e.target;
+  if(e.key!=="Enter"||e.defaultPrevented||e.shiftKey||!/^(INPUT|SELECT)$/.test(t.tagName)||/^(checkbox|radio|button|submit)$/.test(t.type)) return;
+  e.preventDefault();
+  const campos=[...e.currentTarget.querySelectorAll("input,select")].filter(x=>
+    !x.disabled&&!x.readOnly&&x.offsetParent!==null&&!/^(checkbox|radio|hidden|button|submit)$/.test(x.type));
+  const prox=campos[campos.indexOf(t)+1];
+  if(prox){prox.focus(); prox.select?.();}
+  else e.currentTarget.querySelector(".row .btn:not(.ghost)")?.focus();
+}
 function closeModal(){ $("#modalHost").innerHTML=""; }
 
 function guardAdmin(fn,msg){ if(SESSION.role==="admin") fn(); else askAdminPw(fn,msg); }
@@ -1086,7 +1191,15 @@ function askAdminPw(onOk,msg){
     <div class="field"><label>Senha</label><input class="inp" id="apw" type="password" autocomplete="off" placeholder="Senha do admin"></div>
     <div class="err" id="apwErr"></div>
     <div class="row"><button class="btn ghost" data-close>Cancelar</button><button class="btn" id="apwOk">Confirmar</button></div>`);
-  const go=()=>{ if(isAdminPw($("#apw").value)){closeModal();onOk();} else {$("#apwErr").textContent="Senha do administrador incorreta.";} };
+  let conferindo=false;
+  const go=async()=>{
+    if(conferindo) return; conferindo=true; $("#apwOk").disabled=true; $("#apwErr").textContent="";
+    try{
+      if(await DB.senhaAdminOk($("#apw").value)){closeModal();onOk();}
+      else $("#apwErr").textContent="Senha do administrador incorreta.";
+    }catch(e){ $("#apwErr").textContent="Não foi possível conferir a senha: "+e.message; }
+    finally{ conferindo=false; if($("#apwOk")) $("#apwOk").disabled=false; }
+  };
   $("#apwOk").addEventListener("click",go);
   $("#apw").addEventListener("keydown",e=>{if(e.key==="Enter")go();});
   setTimeout(()=>$("#apw")?.focus(),50);
@@ -1196,61 +1309,6 @@ function viewPDV(){
       itens:cart.map(i=>({sku:i.p.sku,qtd:i.qtd,preco:i.preco,cat:i.p.cat})),cats:[...new Set(cart.map(i=>i.p.cat))]};
     VENDAS.push(v); somaFaturamento(dataISO,valor,tipo,fr);
     PDV={cart:[],ultima:v}; viewPDV(); toast(`Venda de ${brl(valor)} registrada. Estoque baixado.`);
-  });
-}
-
-/* ---------------- AJUSTE DE ESTOQUE (só com senha do admin) ---------------- */
-function modalAjuste(pre=""){
-  modal(`<h3><span class="perm-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span>Ajuste de estoque</h3>
-    <p style="margin:0;font-size:12.5px;color:var(--muted)">Baixas e correções fora de venda. Exige a senha do administrador.</p>
-    <div class="field"><label>Código de barras ou código</label>
-      <div class="scanbar"><input class="inp" id="a_code" autocomplete="off" placeholder="Bipe ou digite + Enter" value="${esc(pre)}">
-      <button class="btn ghost" type="button" id="a_find">Buscar</button></div></div>
-    <div id="a_info"></div>
-    <div id="a_body" hidden>
-      <div class="field"><label>Tipo de ajuste</label>
-        <div class="sizes" id="a_tipo">
-          <button type="button" data-t="baixa" class="on">− Baixar</button>
-          <button type="button" data-t="soma">+ Somar</button>
-          <button type="button" data-t="def">= Definir quantidade</button></div></div>
-      <div class="formrow" style="margin-top:12px">
-        <div class="field"><label id="a_qlbl">Quantidade a baixar</label><input class="inp" id="a_qtd" type="number" min="0" placeholder="0"></div>
-        <div class="field"><label>Motivo</label><select class="inp" id="a_mot">
-          <option>Avaria / defeito</option><option>Perda / furto</option><option>Troca com cliente</option><option>Devolução ao fornecedor</option>
-          <option>Uso interno / brinde</option><option>Correção de contagem</option><option>Outro</option></select></div>
-      </div>
-      <div class="field" style="margin-top:12px"><label>Observação</label><input class="inp" id="a_obs" placeholder="Opcional"></div>
-      <div class="mk-calc" id="a_prev"></div>
-    </div>
-    <div class="err" id="a_err"></div>
-    <div class="row"><button class="btn ghost" data-close>Cancelar</button><button class="btn" id="a_save" disabled>Confirmar ajuste</button></div>`,"wide");
-  let prod=null, tipo="baixa";
-  const novo=()=>{const q=parseInt($("#a_qtd").value); if(!prod||isNaN(q)||q<0)return null;
-    return tipo==="baixa"?prod.qtd-q:tipo==="soma"?prod.qtd+q:q;};
-  const prev=()=>{const n=novo(); $("#a_prev").innerHTML=n===null?"":`Estoque: <b>${prod.qtd}</b> → <b style="color:${n<0?'var(--crit)':'var(--fg)'}">${n}</b>`;};
-  $("#a_tipo").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;tipo=b.dataset.t;
-    $("#a_tipo").querySelectorAll("button").forEach(x=>x.classList.toggle("on",x===b));
-    $("#a_qlbl").textContent={baixa:"Quantidade a baixar",soma:"Quantidade a somar",def:"Quantidade correta"}[tipo]; prev();});
-  $("#a_qtd").addEventListener("input",prev);
-  const buscar=()=>{
-    prod=acharProduto($("#a_code").value);
-    if(!prod){$("#a_info").innerHTML=`<div class="infobox warn">Produto não encontrado.</div>`;$("#a_body").hidden=true;$("#a_save").disabled=true;return;}
-    $("#a_info").innerHTML=`<div class="infobox"><div style="display:flex;justify-content:space-between;gap:10px"><div><b>${esc(prod.nome)}</b>
-      <div class="hint">${esc(prod.sku)} · ${esc(prod.cor)} · ${esc(prod.tam)}</div></div><span class="chip good">${prod.qtd} em estoque</span></div></div>`;
-    $("#a_body").hidden=false; $("#a_save").disabled=false; prev(); setTimeout(()=>$("#a_qtd").focus(),30);
-  };
-  $("#a_code").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();buscar();}});
-  $("#a_find").addEventListener("click",buscar);
-  if(pre) buscar(); else setTimeout(()=>$("#a_code").focus(),50);
-  $("#a_save").addEventListener("click",()=>{
-    const n=novo(), err=t=>$("#a_err").textContent=t;
-    if(n===null||(tipo!=="def"&&!(parseInt($("#a_qtd").value)>0))) return err("Informe a quantidade.");
-    if(n<0) return err("O estoque não pode ficar negativo.");
-    if(n===prod.qtd) return err("A quantidade não muda com esse ajuste.");
-    const reg={data:agoraStr(),sku:prod.sku,nome:prod.nome,motivo:$("#a_mot").value,obs:$("#a_obs").value.trim(),antes:prod.qtd,depois:n,user:SESSION.name};
-    const p=prod;
-    const go=()=>{ p.qtd=n; reg.autor=SESSION.role==="admin"?SESSION.name:"senha admin"; AJUSTES.unshift(reg); closeModal(); current="estoque"; renderNav(); route(); toast(`Ajuste gravado: ${p.nome} ${reg.antes} → ${n}.`); };
-    askAdminPw(go,`Confirme o ajuste de ${p.nome} (${reg.antes} → ${n}) com a senha do administrador.`);
   });
 }
 
@@ -1551,8 +1609,12 @@ function invBipe(raw){
   }
   viewInventario();
 }
-function invInicio(){
+const novoIVF=()=>({de:"",ate:"",cat:"",user:""});
+let IVF=novoIVF();
+function invInicio(focar=true){
   const cats=CATEGORIAS.filter(c=>ESTOQUE.some(p=>p.cat===c));
+  const invLista=INVENTARIOS.map((v,i)=>({v,i})).filter(({v})=>pfMatch(v.data,IVF)&&(!IVF.cat||v.cat===IVF.cat)&&(!IVF.user||v.user===IVF.user));
+  const ivAtivo=Object.values(IVF).some(Boolean);
   $("#view").innerHTML=`
   <div class="section">
     <div class="card"><div class="card-h"><h3>Novo inventário por categoria</h3></div><div class="card-b">
@@ -1564,15 +1626,27 @@ function invInicio(){
       <div class="sizes" style="margin-top:12px">${cats.map(c=>`<button type="button" data-c="${esc(c)}">${esc(c)} <span class="hint">(${ESTOQUE.filter(p=>p.cat===c).reduce((s,p)=>s+p.qtd,0)})</span></button>`).join("")}</div>
       <div class="err" id="invErr"></div>
     </div></div>
-    <div class="card" style="margin-top:16px"><div class="card-h"><h3>Inventários gravados</h3></div>
+    <div class="card" style="margin-top:16px"><div class="card-h"><h3>Inventários gravados</h3><span class="hint">clique em um inventário para ver os produtos</span></div>
+      <div class="card-b" style="border-bottom:1px solid var(--border)"><div class="datebar">
+        ${pfHTML("ivf",IVF)}
+        <div class="field"><label>Categoria</label>${optSel("ivf_cat",[...new Set(INVENTARIOS.map(v=>v.cat))].sort((a,b)=>a.localeCompare(b,"pt-BR")),IVF.cat,"Todas")}</div>
+        <div class="field"><label>Responsável</label>${optSel("ivf_user",[...new Set(INVENTARIOS.map(v=>v.user))].sort(),IVF.user)}</div>
+        <button class="btn ghost" id="ivf_clear" ${ivAtivo?"":"disabled"} style="padding:9px 14px">Limpar filtros</button>
+        <button class="btn ghost" id="ivf_print" style="padding:9px 14px">${ICO_PRINT}Imprimir</button>
+      </div></div>
       <div class="card-b pad0"><div class="tw"><table>
         <thead><tr><th>Data</th><th>Categoria</th><th>Responsável</th><th class="num">Itens c/ diferença</th><th class="num">Peças a mais</th><th class="num">Peças a menos</th>${ADM()?'<th class="num">Valor (custo)</th>':''}</tr></thead>
-        <tbody>${INVENTARIOS.length?INVENTARIOS.map(v=>`<tr><td class="tnum">${v.data}</td><td>${esc(v.cat)}</td><td>${esc(v.user)}</td>
+        <tbody>${invLista.length?invLista.map(({v,i})=>`<tr data-inv="${i}" style="cursor:pointer" title="Ver produtos deste inventário"><td class="tnum" style="white-space:nowrap">${esc(v.data)}</td><td>${esc(v.cat)}</td>
+          <td>${esc(v.user)}${v.autor&&v.autor!==v.user?`<div class="hint">aut.: ${esc(v.autor)}</div>`:""}</td>
           <td class="num tnum">${v.difs.length}</td><td class="num tnum">${v.mais}</td><td class="num tnum">${v.menos}</td>
           ${ADM()?`<td class="num tnum" style="color:${v.valor<0?'var(--crit)':'inherit'}">${brl(v.valor)}</td>`:""}</tr>`).join("")
-          :`<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:22px">Nenhum inventário gravado ainda.</td></tr>`}</tbody>
+          :`<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:22px">${INVENTARIOS.length?"Nenhum inventário com esses filtros.":"Nenhum inventário gravado ainda."}</td></tr>`}</tbody>
       </table></div></div></div>
   </div>`;
+  ["de","ate","cat","user"].forEach(k=>$("#ivf_"+k).addEventListener("change",e=>{IVF[k]=e.target.value;invInicio(false);}));
+  $("#ivf_clear").addEventListener("click",()=>{IVF=novoIVF();invInicio(false);});
+  $("#ivf_print").addEventListener("click",()=>imprimirInventarios(invLista.map(x=>x.v),ivAtivo));
+  $("#view").querySelectorAll("[data-inv]").forEach(r=>r.addEventListener("click",()=>modalInventario(+r.dataset.inv)));
   const start=()=>{
     const v=$("#invCat").value.trim().toLowerCase();
     const cat=cats.find(c=>c.toLowerCase()===v)||cats.find(c=>c.toLowerCase().startsWith(v)&&v);
@@ -1582,7 +1656,53 @@ function invInicio(){
   $("#invStart").addEventListener("click",start);
   $("#invCat").addEventListener("keydown",e=>{if(e.key==="Enter")start();});
   $("#view").querySelectorAll("[data-c]").forEach(b=>b.addEventListener("click",()=>{$("#invCat").value=b.dataset.c;start();}));
-  setTimeout(()=>$("#invCat")?.focus(),50);
+  if(focar) setTimeout(()=>$("#invCat")?.focus(),50);
+}
+// linhas de um inventário gravado (os antigos só guardaram sku e diferença)
+function invLinhas(v){
+  return v.difs.map(d=>{const p=ESTOQUE.find(x=>x.sku===d.sku)||{};
+    return {sku:d.sku, nome:d.nome||p.nome||"(produto removido)", cor:d.cor??p.cor??"", tam:d.tam??p.tam??"", ean:d.ean??p.ean??"",
+      antes:d.antes, cont:d.cont, dif:d.dif, custo:d.custo??p.custo};});
+}
+function modalInventario(i){
+  const v=INVENTARIOS[i], adm=ADM(), ls=invLinhas(v), completo=ls.every(l=>l.antes!=null);
+  modal(`<h3>Inventário de ${esc(v.cat)}</h3>
+    <div class="hint">${esc(v.data)} · responsável <b>${esc(v.user)}</b>${v.autor&&v.autor!==v.user?` · autorizado com ${esc(v.autor)}`:""}</div>
+    <div class="tiles" style="grid-template-columns:repeat(${adm?3:2},1fr);gap:8px">
+      <div class="tile" style="padding:10px 12px"><div class="lbl">A mais</div><div class="val tnum" style="font-size:20px;color:var(--warn)">+${v.mais}</div></div>
+      <div class="tile" style="padding:10px 12px"><div class="lbl">A menos</div><div class="val tnum" style="font-size:20px;color:var(--crit)">-${v.menos}</div></div>
+      ${adm?`<div class="tile" style="padding:10px 12px"><div class="lbl">Valor (custo)</div><div class="val tnum" style="font-size:16px;color:${v.valor<0?'var(--crit)':'var(--fg)'}">${brl(v.valor)}</div></div>`:""}
+    </div>
+    ${ls.length?`<div class="tw" style="border:1px solid var(--border);border-radius:10px;max-height:46vh;overflow:auto"><table style="min-width:0">
+      <thead><tr><th>Produto</th>${completo?'<th class="num">Antes</th><th class="num">Contado</th>':""}<th class="num">Dif.</th></tr></thead>
+      <tbody>${ls.map(l=>`<tr><td><b>${esc(l.nome)}</b><div class="hint">${esc(l.sku)}${l.cor?` · ${esc(l.cor)}`:""}${l.tam?` · ${esc(l.tam)}`:""}</div></td>
+        ${completo?`<td class="num tnum">${l.antes}</td><td class="num tnum">${l.cont}</td>`:""}<td class="num">${difTag(l.dif)}</td></tr>`).join("")}</tbody></table></div>`
+      :`<div class="infobox" style="color:var(--good);font-weight:700">Nenhuma diferença neste inventário. ✓</div>`}
+    ${completo?"":`<div class="hint">Inventário gravado antes da atualização: só a diferença de cada produto foi registrada.</div>`}
+    <div class="row"><button class="btn ghost" id="ivPrint" style="margin-right:auto">${ICO_PRINT}Imprimir</button><button class="btn" data-close>Fechar</button></div>`,"wide");
+  $("#ivPrint").addEventListener("click",()=>{
+    imprimirRelatorio(`Inventário de ${v.cat}`,`
+      <div class="meta">Gravado em ${esc(v.data)} · responsável ${esc(v.user)}${v.autor&&v.autor!==v.user?` · autorizado com ${esc(v.autor)}`:""} · ${ls.length} produto(s) com diferença</div>
+      <div class="resumo"><div><small>A mais</small><b class="warn">+${v.mais}</b></div><div><small>A menos</small><b class="crit">-${v.menos}</b></div>
+        ${adm?`<div><small>Valor (custo)</small><b class="${v.valor<0?"crit":""}">${brl(v.valor)}</b></div>`:""}</div>
+      ${ls.length?`<table><thead><tr><th>Produto</th><th>Cód. barras</th><th>Cor</th><th>Tam.</th>${completo?'<th class="n">Antes</th><th class="n">Contado</th>':""}<th class="n">Diferença</th>${adm?'<th class="n">Valor (custo)</th>':""}</tr></thead>
+        <tbody>${ls.map(l=>`<tr><td><b>${esc(l.nome)}</b><div class="sku">${esc(l.sku)}</div></td><td>${esc(l.ean||"—")}</td><td>${esc(l.cor||"—")}</td><td>${esc(l.tam||"—")}</td>
+          ${completo?`<td class="n">${l.antes}</td><td class="n">${l.cont}</td>`:""}<td class="n ${l.dif<0?"crit":"warn"}">${l.dif>0?"+":""}${l.dif}</td>
+          ${adm?`<td class="n">${l.custo!=null?brl(l.dif*l.custo):"—"}</td>`:""}</tr>`).join("")}</tbody></table>`:"<p><b>Nenhuma diferença.</b></p>"}
+      ${v.extras&&v.extras.length?`<div class="aviso"><b>Peças fora da lista</b> (não entraram no ajuste): ${v.extras.map(([k,n])=>esc(k)+" ×"+n).join(", ")}</div>`:""}
+      <div class="ass"><div>Conferido por</div><div>Administrador</div></div>`);
+  });
+}
+function imprimirInventarios(lista,ativo){
+  if(!lista.length) return toast("Nada para imprimir com esses filtros.");
+  const adm=ADM();
+  const mais=lista.reduce((s,v)=>s+v.mais,0), menos=lista.reduce((s,v)=>s+v.menos,0), valor=lista.reduce((s,v)=>s+v.valor,0);
+  imprimirRelatorio("Inventários gravados",`
+    <div class="meta">Emitido em ${agoraStr()} por ${esc(SESSION.name)} · ${lista.length} inventário(s)${ativo?`<br>Filtros: ${esc(pfTxt(IVF,[IVF.cat&&`categoria ${IVF.cat}`,IVF.user&&`responsável ${IVF.user}`]))}`:""}</div>
+    <table><thead><tr><th>Data</th><th>Categoria</th><th>Responsável</th><th class="n">Itens c/ diferença</th><th class="n">Peças a mais</th><th class="n">Peças a menos</th>${adm?'<th class="n">Valor (custo)</th>':""}</tr></thead>
+    <tbody>${lista.map(v=>`<tr><td>${esc(v.data)}</td><td>${esc(v.cat)}</td><td>${esc(v.user)}${v.autor&&v.autor!==v.user?`<div class="sku">aut.: ${esc(v.autor)}</div>`:""}</td>
+      <td class="n">${v.difs.length}</td><td class="n">${v.mais}</td><td class="n">${v.menos}</td>${adm?`<td class="n ${v.valor<0?"crit":""}">${brl(v.valor)}</td>`:""}</tr>`).join("")}</tbody>
+    <tfoot><tr><td colspan="4">Total</td><td class="n">${mais}</td><td class="n">${menos}</td>${adm?`<td class="n">${brl(valor)}</td>`:""}</tr></tfoot></table>`);
 }
 function invResumo(){
   const itens=ESTOQUE.filter(p=>p.cat===INV.cat);
@@ -1605,15 +1725,33 @@ function invResumo(){
       ${extras.map(([k,n])=>esc(k)+" ×"+n).join(", ")}</div>`:""}
     <p style="margin:0;font-size:13.5px;font-weight:700">Gravar inventário? O estoque de ${esc(INV.cat)} passa a ser a quantidade contada.</p>
     <div class="row" style="flex-wrap:wrap">
+      <button class="btn ghost" id="invPrint" style="margin-right:auto">
+        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px;margin-right:4px"><path d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>Imprimir</button>
       <button class="btn ghost" data-close>Voltar a bipar</button>
       <button class="btn ghost" id="invNao">Não gravar</button>
       <button class="btn" id="invSim">Sim, gravar</button></div>`,"wide");
+  $("#invPrint").addEventListener("click",()=>{
+    const adm=ADM();
+    imprimirRelatorio(`Inventário de ${INV.cat}`,`
+      <div class="meta">Conferência em ${agoraStr()} por ${esc(SESSION.name)} · ${itens.length} produto(s) na categoria · ${difs.length} com diferença</div>
+      <div class="resumo"><div><small>A mais</small><b class="warn">+${mais}</b></div><div><small>A menos</small><b class="crit">-${menos}</b></div>
+        ${adm?`<div><small>Valor (custo)</small><b class="${valor<0?"crit":""}">${brl(valor)}</b></div>`:""}</div>
+      ${difs.length?`<table><thead><tr><th>Produto</th><th>Cód. barras</th><th>Cor</th><th>Tam.</th><th class="n">Sistema</th><th class="n">Contado</th><th class="n">Diferença</th>${adm?'<th class="n">Valor (custo)</th>':""}</tr></thead>
+        <tbody>${difs.map(x=>`<tr><td><b>${esc(x.p.nome)}</b><div class="sku">${esc(x.p.sku)}${x.c===0?' · <span class="crit">não encontrado</span>':""}</div></td>
+          <td>${esc(x.p.ean||"—")}</td><td>${esc(x.p.cor||"—")}</td><td>${esc(x.p.tam||"—")}</td>
+          <td class="n">${x.p.qtd}</td><td class="n">${x.c}</td><td class="n ${x.d<0?"crit":"warn"}">${x.d>0?"+":""}${x.d}</td>
+          ${adm?`<td class="n">${brl(x.d*x.p.custo)}</td>`:""}</tr>`).join("")}</tbody></table>`
+        :`<p><b>Nenhuma diferença. Estoque confere.</b></p>`}
+      ${extras.length?`<div class="aviso"><b>${extras.reduce((s,[,n])=>s+n,0)} peça(s) fora da lista</b> (outra categoria ou sem cadastro), não entram no ajuste: ${extras.map(([k,n])=>esc(k)+" ×"+n).join(", ")}</div>`:""}
+      <div class="ass"><div>Conferido por</div><div>Administrador</div></div>`);
+  });
   $("#invNao").addEventListener("click",()=>{INV=null;closeModal();viewInventario();toast("Inventário descartado. Estoque sem alteração.");});
   $("#invSim").addEventListener("click",()=>{
     const gravar=()=>{
+      INVENTARIOS.unshift({data:agoraStr(),cat:INV.cat,user:SESSION.name,autor:SESSION.role==="admin"?SESSION.name:"senha admin",
+        difs:difs.map(x=>({sku:x.p.sku,nome:x.p.nome,cor:x.p.cor,tam:x.p.tam,ean:x.p.ean||"",antes:x.p.qtd,cont:x.c,dif:x.d,custo:x.p.custo})),
+        extras,mais,menos,valor});
       difs.forEach(x=>x.p.qtd=x.c);
-      INVENTARIOS.unshift({data:new Date().toLocaleString("pt-BR",{dateStyle:"short",timeStyle:"short"}),cat:INV.cat,user:SESSION.name,
-        difs:difs.map(x=>({sku:x.p.sku,dif:x.d})),mais,menos,valor});
       const cat=INV.cat; INV=null; closeModal(); viewInventario(); toast(`Inventário de ${cat} gravado. Estoque ajustado.`);
     };
     if(SESSION.role==="admin") gravar();
@@ -1841,7 +1979,8 @@ const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
   };
   const saved={}, verLocal={};
   for(const k in KEYS) saved[k]=JSON.stringify(KEYS[k][0]());
-  let sb=null, ready=false, saving=false, pendingRemote=false;
+  // tudo passa por funções do banco que exigem a sessão de login (ver seguranca-supabase.sql)
+  let sb=null, TOKEN=null, ready=false, saving=false, pendingRemote=false, expirou=false, iniciado=false;
 
   const pill=document.createElement("div");
   pill.style.cssText="position:fixed;right:12px;bottom:12px;z-index:999;font:600 12px var(--font-body,system-ui);padding:6px 10px;border-radius:999px;background:var(--surface,#fff);color:var(--muted,#666);border:1px solid var(--border,#ddd);box-shadow:var(--shadow);pointer-events:none;transition:opacity .3s";
@@ -1851,11 +1990,11 @@ const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
   status("Conectando ao banco…",null,true);
 
   const busy=()=>!!$("#modalHost").innerHTML.trim()||(document.activeElement&&/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName));
+  const sujos=()=>Object.keys(KEYS).filter(k=>JSON.stringify(KEYS[k][0]())!==saved[k]);
   function refresh(){
     if(busy()){pendingRemote=true;return;}
     pendingRemote=false;
     if(SESSION){SESSION=USERS.find(u=>u.id===SESSION.id)||SESSION; startApp();}
-    else { if(!USERS.some(u=>u.id===pickUser&&u.ativo)) pickUser=(USERS.find(u=>u.ativo)||USERS[0]).id; renderPills(); }
   }
   // aplica uma linha vinda do banco; devolve true se mudou algo
   function applyRow(r){
@@ -1866,42 +2005,71 @@ const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
     if(ready && JSON.stringify(KEYS[k][0]())!==saved[k]) return false; // edição local não salva vence
     try{ KEYS[k][1](JSON.parse(s)); saved[k]=s; return true; }catch(e){ return false; }
   }
+  async function rpc(nome,args){
+    const {data,error}=await sb.rpc(nome,args||{});
+    if(error){ if(/sessao_invalida/.test(error.message)) sessaoEncerrada(); throw new Error(error.message); }
+    return data;
+  }
+  function sessaoEncerrada(){
+    if(expirou||!TOKEN) return; expirou=true; ready=false;
+    const perde=sujos().length;
+    status("Sessão encerrada — entre de novo","var(--crit)",true);
+    modal(`<h3>Sessão encerrada</h3><p style="margin:0;font-size:13px;color:var(--muted)">Por segurança, entre de novo com sua senha.${perde?" Alterações feitas nos últimos segundos podem não ter sido salvas.":""}</p>
+      <div class="row"><button class="btn" id="relog">Entrar de novo</button></div>`);
+    $("#relog").addEventListener("click",()=>location.reload());
+  }
   async function loadAll(){
-    const {data,error}=await sb.from("estado").select("key,data,v");
-    if(error) throw error;
-    let ch=false; (data||[]).forEach(r=>{ if(applyRow(r)) ch=true; });
+    let ch=false; (await rpc("estado_ler",{p_token:TOKEN})||[]).forEach(r=>{ if(applyRow(r)) ch=true; });
+    return ch;
+  }
+  // confere as versões e baixa só o que mudou em outro computador
+  async function sync(){
+    const mud=(await rpc("estado_versoes",{p_token:TOKEN})||[]).filter(r=>KEYS[r.key]&&r.v!==verLocal[r.key]).map(r=>r.key);
+    if(!mud.length) return;
+    let ch=false; (await rpc("estado_ler",{p_token:TOKEN,p_keys:mud})||[]).forEach(r=>{ if(applyRow(r)) ch=true; });
     if(ch) refresh();
   }
   async function tick(){
     if(!ready||saving) return;
     if(pendingRemote&&!busy()) refresh();
-    const sujos=Object.keys(KEYS).filter(k=>JSON.stringify(KEYS[k][0]())!==saved[k]);
-    if(!sujos.length) return;
+    const ks=sujos();
+    if(!ks.length) return;
     saving=true; status("Salvando…",null,true);
     try{
-      for(const k of sujos){
+      for(const k of ks){
         const str=JSON.stringify(KEYS[k][0]());
         const v=Date.now().toString(36)+Math.random().toString(36).slice(2,6);
-        const {error}=await sb.from("estado").upsert({key:k,data:JSON.parse(str),v,updated_at:new Date().toISOString()});
-        if(error) throw error;
+        await rpc("estado_salvar",{p_token:TOKEN,p_key:k,p_data:JSON.parse(str),p_v:v});
         verLocal[k]=v; saved[k]=str;
       }
       status("✓ Salvo","var(--good)");
-    }catch(e){ status("Erro ao salvar: "+(e&&e.message||"sem conexão")+" — tentando de novo…","var(--crit)",true); }
+    }catch(e){ if(!expirou) status("Erro ao salvar: "+(e&&e.message||"sem conexão")+" — tentando de novo…","var(--crit)",true); }
     finally{ saving=false; }
   }
+  function iniciar(){
+    if(iniciado) return; iniciado=true;
+    setInterval(tick,1500);
+    setInterval(()=>{ if(ready&&!saving) sync().catch(()=>{}); },4000);
+    addEventListener("beforeunload",e=>{ if(ready&&(saving||sujos().length)){ e.preventDefault(); e.returnValue=""; } });
+  }
+
+  window.DB={
+    async entrar(user,senha){
+      TOKEN=await rpc("login",{p_user:user,p_senha:senha});
+      expirou=false; await loadAll(); ready=true; iniciar();
+      status("✓ Conectado — alterações são salvas automaticamente","var(--good)");
+    },
+    async sair(){ if(TOKEN) await rpc("logout",{p_token:TOKEN}); TOKEN=null; ready=false; },
+    async senhaAdminOk(senha){ return !!(await rpc("conferir_senha_admin",{p_token:TOKEN,p_senha:senha})); },
+    async definirSenha(user,atual,nova){ await rpc("definir_senha",{p_token:TOKEN,p_user:user,p_atual:atual,p_nova:nova}); },
+  };
 
   (async()=>{
     if(!window.supabase||/COLE_AQUI/.test(SUPABASE_URL+SUPABASE_KEY)){
-      status(window.supabase?"Banco não configurado — preencha SUPABASE_URL e SUPABASE_KEY":"Sem internet / Supabase não carregou — alterações NÃO serão salvas","var(--crit)",true); return; }
-    sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
-    try{ await loadAll(); }
-    catch(e){ status("Não foi possível ler o banco: "+(e.message||e),"var(--crit)",true); return; }
-    ready=true; status("✓ Conectado — alterações são salvas automaticamente","var(--good)");
-    sb.channel("estado").on("postgres_changes",{event:"*",schema:"public",table:"estado"},p=>{ if(applyRow(p.new)) refresh(); }).subscribe();
-    setInterval(tick,1500);
-    setInterval(()=>{ if(!saving) loadAll().catch(()=>{}); },30000);   // reserva caso o tempo real caia
-    addEventListener("beforeunload",e=>{ if(saving||Object.keys(KEYS).some(k=>JSON.stringify(KEYS[k][0]())!==saved[k])){ e.preventDefault(); e.returnValue=""; } });
+      status(window.supabase?"Banco não configurado — preencha SUPABASE_URL e SUPABASE_KEY":"Sem internet / Supabase não carregou — não é possível entrar","var(--crit)",true); return; }
+    sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY,{auth:{persistSession:false,autoRefreshToken:false}});
+    try{ LOGIN_USERS=await rpc("lista_login")||[]; renderPills(); status("✓ Conectado","var(--good)"); }
+    catch(e){ status("Não foi possível ler o banco: "+(e.message||e),"var(--crit)",true); $("#userPills").innerHTML='<span class="hint">Não foi possível carregar os usuários.</span>'; }
   })();
 })();
 
