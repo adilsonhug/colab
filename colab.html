@@ -638,8 +638,8 @@ function viewVendas(){
   const vendedores=[...new Set([...USERS.map(u=>u.name),...VENDAS.map(v=>v.vend)])];
   const pays=[...new Set([...PAGAMENTOS,...VENDAS.map(v=>v.pay)])];
   const cats=CATEGORIAS.filter(c=>VENDAS.some(v=>(v.cats||[]).includes(c)));
-  const q=VF.q.toLowerCase();
-  const lista=VENDAS.filter(v=>dfMatch(v.dataISO,VF.d)&&(!q||v.desc.toLowerCase().includes(q))&&(!VF.vend||v.vend===VF.vend)&&(!VF.tipo||v.tipo===VF.tipo)&&(!VF.pay||v.pay===VF.pay)&&(!VF.cat||(v.cats||[]).includes(VF.cat)))
+  const q=VF.q.trim();
+  const lista=VENDAS.filter(v=>dfMatch(v.dataISO,VF.d)&&(!q||busca(v.desc,q))&&(!VF.vend||v.vend===VF.vend)&&(!VF.tipo||v.tipo===VF.tipo)&&(!VF.pay||v.pay===VF.pay)&&(!VF.cat||(v.cats||[]).includes(VF.cat)))
     .sort((a,b)=>b.dataISO.localeCompare(a.dataISO)||(b.hora||"").localeCompare(a.hora||"")||b.id-a.id);
   const totFil=lista.reduce((s,v)=>s+v.valor,0);
   const ativo=VF.vend||VF.tipo||VF.pay||VF.cat||VF.q||dfAtivo(VF.d);
@@ -693,6 +693,9 @@ function rerender(fn){
   fn();
   if(id){const n=document.getElementById(id); if(n&&n!==document.body){n.focus(); if(pos!=null&&n.setSelectionRange)try{n.setSelectionRange(pos,pos);}catch(e){}}}
 }
+// pesquisa sem diferenciar acento, ç e maiúsculas; todas as palavras digitadas precisam aparecer (em qualquer ordem)
+const semAcento=s=>String(s??"").normalize("NFD").replace(/[̀-ͯ]/g,"").toLowerCase();
+const busca=(campos,q)=>{const t=semAcento([].concat(campos).join(" ")); return semAcento(q).split(/\s+/).filter(Boolean).every(w=>t.includes(w));};
 const optSel=(id,opts,val,todos="Todos")=>`<select class="inp" id="${id}"><option value="">${todos}</option>${opts.map(o=>{const [v,l]=Array.isArray(o)?o:[o,o];return `<option value="${esc(v)}" ${v===val?"selected":""}>${esc(l)}</option>`;}).join("")}</select>`;
 const situacao=p=>p.qtd===0?"Esgotado":p.qtd<=p.min?"Baixo":"OK";
 const novoEF=()=>({q:"",ean:"",cor:"",tam:"",cat:"",forn:"",sit:""});
@@ -718,9 +721,9 @@ function imprimirAjustes(lista,ativo){
 }
 function viewEstoque(){
   const isAdmin=SESSION.role==="admin";
-  const q=EF.q.toLowerCase();
+  const q=EF.q.trim();
   const lista=ESTOQUE.map((p,i)=>({p,i})).filter(({p})=>
-    (!q||[p.nome,p.sku,p.ean||""].join(" ").toLowerCase().includes(q)) && (!EF.ean||String(p.ean||"").includes(EF.ean.trim())) &&
+    (!q||busca([p.nome,p.sku,p.ean,p.cor,p.tam],q)) && (!EF.ean||String(p.ean||"").includes(EF.ean.trim())) &&
     (!EF.cor||p.cor===EF.cor) && (!EF.tam||p.tam===EF.tam) && (!EF.cat||p.cat===EF.cat) && (!EF.forn||fornDe(p)===EF.forn) &&
     (!EF.sit||(EF.sit==="alerta"?situacao(p)!=="OK":situacao(p)===EF.sit)));
   const ativo=Object.values(EF).some(Boolean);
@@ -1104,10 +1107,10 @@ let ENF=novoENF();
 function viewEntradas(){
   const adm=ADM();
   const prodDe=e=>ESTOQUE.find(x=>x.sku===e.sku)||{};
-  const q=ENF.q.toLowerCase();
+  const q=ENF.q.trim();
   const lista=ENTRADAS.slice().sort((a,b)=>b.data.localeCompare(a.data)).filter(e=>{const p=prodDe(e);
     return dfMatch(e.data,ENF.d)&&(!ENF.forn||e.forn===ENF.forn)&&(!ENF.cat||p.cat===ENF.cat)&&
-      (!q||[e.nome,e.sku,p.cor,p.tam].join(" ").toLowerCase().includes(q));});
+      (!q||busca([e.nome,e.sku,p.cor,p.tam],q));});
   const ativo=!!(ENF.forn||ENF.q||ENF.cat||dfAtivo(ENF.d));
   const pecas=lista.reduce((s,e)=>s+e.qtd,0), totC=lista.reduce((s,e)=>s+e.qtd*e.custo,0), totV=lista.reduce((s,e)=>s+e.qtd*(e.preco||0),0);
   const forns=[...new Set(ENTRADAS.map(e=>e.forn))].sort((a,b)=>a.localeCompare(b,"pt-BR"));
@@ -1160,8 +1163,8 @@ function viewEntradas(){
 const despesasMes=()=>DESPESAS.filter(d=>d.data.startsWith(MES_ATUAL)).reduce((s,d)=>s+d.valor,0);
 let DSF={d:{ano:MES_ATUAL.slice(0,4),mes:MES_ATUAL.slice(5,7),dia:""},q:""};
 function viewDespesas(){
-  const q=DSF.q.toLowerCase();
-  const lista=DESPESAS.filter(d=>dfMatch(d.data,DSF.d)&&(!q||[d.forn,d.desc,d.pay].join(" ").toLowerCase().includes(q)))
+  const q=DSF.q.trim();
+  const lista=DESPESAS.filter(d=>dfMatch(d.data,DSF.d)&&(!q||busca([d.forn,d.desc,d.pay],q)))
     .sort((a,b)=>b.data.localeCompare(a.data)||b.id-a.id);
   const tot=lista.reduce((s,d)=>s+d.valor,0);
   const per=DSF.d.mes?`${MESES_L[+DSF.d.mes-1]}${DSF.d.ano?"/"+DSF.d.ano:""}`:DSF.d.ano?`Ano ${DSF.d.ano}`:"Todo o período";
@@ -1471,7 +1474,6 @@ function viewPDV(){
   };
   // busca por descrição: todas as palavras digitadas precisam aparecer (nome, código, cor, tamanho, categoria)
   let sug=[], sel=0;
-  const semAcento=s=>String(s||"").normalize("NFD").replace(/[̀-ͯ]/g,"").toLowerCase();
   const fechaSug=()=>{sug=[];$("#v_sug").hidden=true;};
   const desenhaSug=()=>{
     const box=$("#v_sug");
@@ -1581,7 +1583,7 @@ function modalConsulta(){
   const mostra=()=>{
     const v=inp.value.trim(); if(!v) return;
     let p=acharProduto(v);
-    if(!p){ const q=v.toLowerCase(), nomes=[...new Set(ESTOQUE.filter(x=>x.nome.toLowerCase().includes(q)).map(x=>x.nome))];
+    if(!p){ const nomes=[...new Set(ESTOQUE.filter(x=>busca(x.nome,v)).map(x=>x.nome))];
       if(nomes.length===1) p=ESTOQUE.find(x=>x.nome===nomes[0]);
       else { $("#cq_res").innerHTML=`<div class="infobox" style="color:var(--crit)">${nomes.length?`Vários modelos com “${esc(v)}”: ${nomes.slice(0,6).map(esc).join(", ")}${nomes.length>6?"…":""}. Digite mais do nome.`:`Nenhum produto com o código “${esc(v)}”.`}</div>`; inp.select(); return; } }
     const chave=p.nome.trim().toLowerCase(), mod=ESTOQUE.filter(x=>x.nome.trim().toLowerCase()===chave);
