@@ -165,6 +165,14 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
 /* estoque / código de barras */
 .scanbar{display:flex;gap:10px;align-items:center}
 .scanbar .inp{font-size:16px;letter-spacing:.04em}
+.busca{position:relative;flex:1;min-width:0}
+.busca .inp{width:100%}
+.sugest{position:absolute;left:0;right:0;top:calc(100% + 4px);z-index:30;background:var(--surface);border:1px solid var(--border);border-radius:10px;box-shadow:var(--shadow);max-height:320px;overflow:auto}
+.sugest button{display:flex;width:100%;gap:10px;align-items:center;justify-content:space-between;text-align:left;border:0;border-bottom:1px solid var(--border);background:none;color:var(--fg);padding:9px 12px;font:inherit;font-size:13px;cursor:pointer}
+.sugest button:last-child{border-bottom:0}
+.sugest button.on,.sugest button:hover{background:var(--accent-soft)}
+.sugest button:disabled{opacity:.5;cursor:not-allowed}
+.sugest .vazio{padding:10px 12px;color:var(--muted);font-size:13px}
 .scan-ico{width:42px;height:42px;border-radius:10px;background:var(--accent-soft);color:var(--accent);display:grid;place-items:center;flex:none}
 .scan-ico svg{width:22px;height:22px}
 tbody tr.hl{background:var(--accent-soft)}
@@ -653,7 +661,7 @@ const situacao=p=>p.qtd===0?"Esgotado":p.qtd<=p.min?"Baixo":"OK";
 const novoEF=()=>({q:"",ean:"",cor:"",tam:"",cat:"",forn:"",sit:""});
 // fornecedor do produto: o do cadastro ou o da última entrada
 const fornDe=p=>p.forn||(ENTRADAS.filter(e=>e.sku===p.sku&&e.forn&&e.forn!=="—").sort((a,b)=>b.data.localeCompare(a.data))[0]||{}).forn||"";
-let EF=novoEF(), ESTQ_HL=null;
+let EF=novoEF(), ESTQ_HL=null, ESTQ_SEL=new Set(); // ESTQ_SEL: códigos (sku) marcados para etiqueta
 const novoAJF=()=>({de:"",ate:"",motivo:"",user:""});
 let AJF=novoAJF();
 function imprimirAjustes(lista,ativo){
@@ -677,7 +685,8 @@ function viewEstoque(){
   const ativo=Object.values(EF).some(Boolean);
   const pecas=lista.reduce((s,{p})=>s+p.qtd,0), totCusto=lista.reduce((s,{p})=>s+p.qtd*p.custo,0), totVenda=lista.reduce((s,{p})=>s+p.qtd*p.preco,0);
   const uniq=k=>[...new Set(ESTOQUE.map(p=>p[k]).filter(Boolean))].sort((a,b)=>String(a).localeCompare(String(b),"pt-BR",{numeric:true}));
-  const ncol=isAdmin?11:10;
+  const ncol=isAdmin?12:11;
+  ESTQ_SEL.forEach(s=>{ if(!ESTOQUE.some(p=>p.sku===s)) ESTQ_SEL.delete(s); });
   const ajLista=AJUSTES.filter(a=>pfMatch(a.data,AJF)&&(!AJF.motivo||a.motivo===AJF.motivo)&&(!AJF.user||a.user===AJF.user));
   const ajAtivo=Object.values(AJF).some(Boolean);
   const fornsE=[...new Set(ESTOQUE.map(fornDe).filter(Boolean))].sort((a,b)=>a.localeCompare(b,"pt-BR"));
@@ -686,6 +695,9 @@ function viewEstoque(){
     <div class="toolbar">
       <button class="btn" id="addProd">+ Cadastrar / dar entrada</button>
       <button class="btn ghost" id="goCats">+ Nova categoria</button>
+      <button class="btn ghost" id="estEtq" title="Etiquetas dos produtos marcados (ou, sem marcação, dos filtrados)">
+        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="vertical-align:-2px;margin-right:4px"><path d="M4 6v12M8 6v12M11 6v12M15 6v12M18 6v12M21 6v12"/></svg><span id="estEtqTxt">Etiquetas</span></button>
+      <button class="btn ghost sm" id="estSelClear" hidden>Desmarcar todos</button>
       <button class="btn ghost" id="estPrint" title="Imprime a lista como está filtrada">
         <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px;margin-right:4px"><path d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>Imprimir</button>
       <button class="btn ghost" id="estXlsx" title="Baixa a lista como está filtrada em planilha Excel">
@@ -702,8 +714,9 @@ function viewEstoque(){
       ${isAdmin?`<div class="tile"><div class="lbl">Lucro potencial</div><div class="val tnum">${brl(totVenda-totCusto)}</div><div class="sub">${totVenda?Math.round((totVenda-totCusto)/totVenda*100):0}% de margem</div></div>`:""}
     </div>
     <div class="card"><div class="card-b pad0"><div class="tw"><table>
-      <thead><tr><th>Produto</th><th>Cód. barras</th><th>Cor</th><th>Tam.</th><th>Categoria</th><th>Fornecedor</th>${isAdmin?'<th class="num">Custo</th>':''}<th class="num">Preço venda</th><th class="num">Estoque</th><th>Situação</th><th></th></tr>
+      <thead><tr><th style="width:34px"><input type="checkbox" id="estSelAll" title="Marcar todos os produtos da lista" style="width:17px;height:17px;cursor:pointer"></th><th>Produto</th><th>Cód. barras</th><th>Cor</th><th>Tam.</th><th>Categoria</th><th>Fornecedor</th>${isAdmin?'<th class="num">Custo</th>':''}<th class="num">Preço venda</th><th class="num">Estoque</th><th>Situação</th><th></th></tr>
       <tr class="fil">
+        <th></th>
         <th><input class="inp" id="ef_q" placeholder="Nome ou código" value="${esc(EF.q)}"></th>
         <th><input class="inp" id="ef_ean" placeholder="Cód. barras" value="${esc(EF.ean)}" style="width:110px"></th>
         <th>${optSel("ef_cor",uniq("cor"),EF.cor)}</th>
@@ -716,6 +729,7 @@ function viewEstoque(){
       <tbody>${lista.length?lista.map(({p,i})=>{
         const st=p.qtd===0?["stock-out","Esgotado","crit"]:p.qtd<=p.min?["stock-low","Baixo","warn"]:["stock-ok","OK","good"];
         return `<tr id="row-${i}" class="${ESTQ_HL===i?'hl':''}">
+          <td><input type="checkbox" data-sel="${esc(p.sku)}" ${ESTQ_SEL.has(p.sku)?"checked":""} title="Marcar para etiqueta" style="width:17px;height:17px;cursor:pointer"></td>
           <td><b>${esc(p.nome)}</b><div style="color:var(--muted);font-size:11px">${esc(p.sku)}</div></td>
           <td class="tnum" style="font-size:12px;white-space:nowrap">${esc(p.ean||"—")}</td>
           <td>${esc(p.cor||"—")}</td>
@@ -730,7 +744,7 @@ function viewEstoque(){
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg></button></td></tr>`;
       }).join(""):`<tr><td colspan="${ncol}" style="text-align:center;color:var(--muted);padding:24px">${ESTOQUE.length?"Nenhum produto com esses filtros.":"Estoque vazio. Lance os produtos pela aba Importar nota ou em + Cadastrar / dar entrada."}</td></tr>`}</tbody>
       <tfoot><tr>
-        <td colspan="6" style="font-weight:700">Total ${ativo?"filtrado":"em estoque"} <span class="hint" style="font-weight:500">· valores × quantidade</span>
+        <td colspan="7" style="font-weight:700">Total ${ativo?"filtrado":"em estoque"} <span class="hint" style="font-weight:500">· valores × quantidade</span>
           ${ativo?`<button class="btn ghost sm" id="ef_clear" style="margin-left:8px">Limpar filtros</button>`:""}</td>
         ${isAdmin?`<td class="num tnum" style="font-weight:800">${brl(totCusto)}</td>`:""}
         <td class="num tnum" style="font-weight:800">${brl(totVenda)}</td>
@@ -760,6 +774,30 @@ function viewEstoque(){
   $("#goCats").addEventListener("click",()=>guardAdmin(()=>modalCategorias(),"Criar categorias é permitido apenas com a senha do administrador."));
   $("#addProd").addEventListener("click",()=>modalProduto());
   $("#estPrint").addEventListener("click",()=>imprimirEstoque(lista.map(x=>x.p),isAdmin,ativo));
+  // seleção para etiquetas (marcados continuam marcados ao trocar de filtro)
+  const selUI=()=>{
+    const n=ESTQ_SEL.size, vis=lista.filter(x=>ESTQ_SEL.has(x.p.sku)).length, all=$("#estSelAll");
+    $("#estEtqTxt").textContent=n?`Etiquetas (${n} marcado${n>1?"s":""})`:"Etiquetas";
+    $("#estSelClear").hidden=!n;
+    all.checked=!!lista.length&&vis===lista.length; all.indeterminate=vis>0&&vis<lista.length;
+  };
+  $("#view").querySelectorAll("[data-sel]").forEach(c=>c.addEventListener("change",()=>{ c.checked?ESTQ_SEL.add(c.dataset.sel):ESTQ_SEL.delete(c.dataset.sel); selUI(); }));
+  $("#estSelAll").addEventListener("change",e=>{
+    lista.forEach(x=>e.target.checked?ESTQ_SEL.add(x.p.sku):ESTQ_SEL.delete(x.p.sku));
+    $("#view").querySelectorAll("[data-sel]").forEach(c=>c.checked=e.target.checked); selUI();
+  });
+  $("#estSelClear").addEventListener("click",()=>{ ESTQ_SEL.clear(); $("#view").querySelectorAll("[data-sel]").forEach(c=>c.checked=false); selUI(); });
+  selUI();
+  $("#estEtq").addEventListener("click",()=>{
+    if(ESTQ_SEL.size){
+      const marc=ESTOQUE.filter(p=>ESTQ_SEL.has(p.sku));
+      return modalEtiquetas(marc.map(p=>({p,n:p.qtd>0?p.qtd:1})),`Etiquetas — ${marc.length} produto(s) marcado(s)`,
+        "Uma etiqueta por peça em estoque (esgotados: 1). Ajuste as quantidades se precisar — para reimprimir só uma, coloque 1.");
+    }
+    if(!lista.length) return toast("Nenhum produto com esses filtros.");
+    modalEtiquetas(lista.map(x=>({p:x.p,n:x.p.qtd})),`Etiquetas — ${lista.length} produto(s)${ativo?" filtrado(s)":""}`,
+      "Nenhum produto marcado: vale a lista filtrada, uma etiqueta por peça em estoque. Ajuste as quantidades se precisar.");
+  });
   $("#estXlsx").addEventListener("click",()=>excelEstoque(lista.map(x=>x.p),isAdmin));
   [["ef_q","q","input"],["ef_ean","ean","input"],["ef_cor","cor","change"],["ef_tam","tam","change"],["ef_cat","cat","change"],["ef_forn","forn","change"],["ef_sit","sit","change"]]
     .forEach(([id,k,ev])=>$("#"+id).addEventListener(ev,e=>{EF[k]=e.target.value;ESTQ_HL=null;rerender(()=>viewEstoque(false));}));
@@ -777,7 +815,9 @@ function modalEditarProduto(i){
   modal(`<h3><span class="perm-ico" style="background:var(--accent-soft);color:var(--accent)">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg></span>Editar produto</h3>
     <div class="g g2">
-      <div class="field"><label>Código de barras <span class="req">*</span></label><input class="inp" id="e_ean" autocomplete="off" value="${esc(p.ean||"")}" style="letter-spacing:.04em"></div>
+      <div class="field"><label>Código de barras ${p.ean?'<span class="lock" title="Exige senha do administrador">🔒</span>':'<span class="req">*</span>'}</label>
+        <div style="display:flex;gap:6px"><input class="inp" id="e_ean" autocomplete="off" value="${esc(p.ean||"")}" style="letter-spacing:.04em">
+        <button class="btn ghost sm" type="button" id="e_gerar" title="Criar um código interno da loja" style="white-space:nowrap">Gerar</button></div></div>
       <div class="field"><label>Descrição do produto <span class="req">*</span></label><input class="inp" id="e_nome" value="${esc(p.nome)}"></div>
     </div>
     <div class="g g3">
@@ -801,9 +841,10 @@ function modalEditarProduto(i){
         <option>Devolução ao fornecedor</option><option>Uso interno / brinde</option><option>Outro</option></select></div>
       <div class="field"><label>Observação</label><input class="inp" id="e_obs" placeholder="Opcional"></div>
     </div>
-    <div class="hint">Alterar o <b>preço de venda</b> ou a <b>quantidade</b> pede a senha do administrador. Mudanças de quantidade ficam registradas em “Ajustes de estoque”.</div>
+    <div class="hint">Alterar o <b>preço de venda</b>, a <b>quantidade</b>${p.ean?" ou o <b>código de barras</b>":""} pede a senha do administrador. Mudanças de quantidade ficam registradas em “Ajustes de estoque”.</div>
     <div class="err" id="e_err"></div>
     <div class="row"><button class="btn ghost" data-close>Cancelar</button><button class="btn" id="e_save">Salvar alterações</button></div>`,"wide compact");
+  $("#e_gerar").addEventListener("click",()=>{$("#e_ean").value=gerarEAN(); $("#e_nome").focus();});
   const qtdIn=()=>parseInt($("#e_qtd").value);
   $("#e_qtd").addEventListener("input",()=>{$("#e_motbox").hidden=qtdIn()===p.qtd||isNaN(qtdIn());});
   setTimeout(()=>$("#e_nome")?.focus(),50);
@@ -828,10 +869,12 @@ function modalEditarProduto(i){
     if(isNaN(d.qtd)||d.qtd<0) return err("A quantidade não pode ficar negativa.");
     if(isNaN(d.min)||d.min<0) return err("Estoque mínimo inválido.");
     const mudaPreco=Math.abs(d.preco-p.preco)>0.004, mudaQtd=d.qtd!==p.qtd;
+    const mudaEan=!!p.ean&&d.ean!==String(p.ean); // código já cadastrado só muda com a senha do administrador
     const motivo=$("#e_mot").value, obs=$("#e_obs").value.trim(); // lidos antes: a tela de senha substitui este modal
     const gravar=()=>{
       if(d.sku!==p.sku){ // mantém histórico ligado ao produto
         const velho=p.sku;
+        if(ESTQ_SEL.delete(velho)) ESTQ_SEL.add(d.sku);
         ENTRADAS.forEach(e=>{if(e.sku===velho)e.sku=d.sku;});
         AJUSTES.forEach(a=>{if(a.sku===velho)a.sku=d.sku;});
         VENDAS.forEach(v=>(v.itens||[]).forEach(it=>{if(it.sku===velho)it.sku=d.sku;}));
@@ -842,8 +885,9 @@ function modalEditarProduto(i){
       closeModal(); ESTQ_HL=i; viewEstoque();
       toast(`${p.nome} (${p.cor} · ${p.tam}) atualizado.`);
     };
-    if(mudaPreco||mudaQtd){
-      const o=[mudaPreco&&`preço ${brl(p.preco)} → ${brl(d.preco)}`, mudaQtd&&`quantidade ${p.qtd} → ${d.qtd}`].filter(Boolean).join(" e ");
+    if(mudaPreco||mudaQtd||mudaEan){
+      const o=[mudaPreco&&`preço ${brl(p.preco)} → ${brl(d.preco)}`, mudaQtd&&`quantidade ${p.qtd} → ${d.qtd}`,
+        mudaEan&&`código de barras ${p.ean} → ${d.ean}`].filter(Boolean).join(" e ");
       askAdminPw(gravar,`Confirme a alteração de ${esc(p.nome)} (${o}) com a senha do administrador.`);
     } else gravar();
   });
@@ -884,6 +928,95 @@ function imprimirEstoque(itens,isAdmin,ativo){
     <table><thead><tr><th>Produto</th><th>Cód. barras</th><th>Cor</th><th>Tam.</th><th>Categoria</th><th>Fornecedor</th>${isAdmin?'<th class="n">Custo</th>':""}<th class="n">Preço venda</th><th class="n">Estoque</th><th>Situação</th></tr></thead>
     <tbody>${itens.map(p=>{const s=situacao(p);return `<tr><td><b>${esc(p.nome)}</b><div class="sku">${esc(p.sku)}</div></td><td>${esc(p.ean||"—")}</td><td>${esc(p.cor||"—")}</td><td>${esc(p.tam||"—")}</td><td>${esc(p.cat)}</td><td>${esc(fornDe(p)||"—")}</td>${isAdmin?`<td class="n">${brl(p.custo)}</td>`:""}<td class="n">${brl(p.preco)}</td><td class="n">${p.qtd}</td><td class="${s==="Esgotado"?"crit":s==="Baixo"?"warn":""}">${s}</td></tr>`;}).join("")}</tbody>
     <tfoot><tr><td colspan="6">Total</td>${isAdmin?`<td class="n">${brl(totCusto)}</td>`:""}<td class="n">${brl(totVenda)}</td><td class="n">${n0(pecas)}</td><td></td></tr></tfoot></table>`);
+}
+/* ---------------- ETIQUETAS COM CÓDIGO DE BARRAS ---------------- */
+// código interno da loja: EAN-13 começando com "200" (faixa reservada para uso interno) + sequência + dígito verificador
+const eanDV=d12=>{let s=0; for(let i=0;i<12;i++) s+=(+d12[i])*(i%2?3:1); return String((10-s%10)%10);};
+const eanValido=c=>/^\d{13}$/.test(c)&&eanDV(c.slice(0,12))===c[12];
+function gerarEAN(){
+  const usados=new Set(ESTOQUE.map(p=>String(p.ean||"")));
+  let n=[...usados].filter(e=>/^200\d{10}$/.test(e)).reduce((m,e)=>Math.max(m,+e.slice(3,12)),0), c;
+  do{ n++; const b="200"+String(n).padStart(9,"0"); c=b+eanDV(b); }while(usados.has(c));
+  return c;
+}
+const ETQ_TAM={"40x25":[40,25],"50x30":[50,30],"33x22":[33,22]};
+const etqPref=()=>{ try{ return JSON.parse(localStorage.getItem("colab_etq")||"{}"); }catch(e){ return {}; } };
+const etqSalvaPref=o=>{ try{ localStorage.setItem("colab_etq",JSON.stringify(o)); }catch(e){} };
+let _barLib=null;
+const carregaBarcode=()=>_barLib||(_barLib=new Promise((ok,erro)=>{
+  if(window.JsBarcode) return ok(window.JsBarcode);
+  const s=document.createElement("script");
+  s.src="https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.11.6/JsBarcode.all.min.js";
+  s.onload=()=>ok(window.JsBarcode); s.onerror=()=>{_barLib=null;erro(new Error("jsbarcode"));};
+  document.head.appendChild(s);
+}));
+// itens: [{p, n}] → n etiquetas de cada produto (uma por página, como a impressora térmica espera)
+async function imprimirEtiquetas(itens,tam,comPreco){
+  const JB=await carregaBarcode();
+  const [W,H]=ETQ_TAM[tam]||ETQ_TAM["40x25"], k=H/25;
+  const svgDe=code=>{const s=document.createElementNS("http://www.w3.org/2000/svg","svg");
+    JB(s,code,{format:eanValido(code)?"EAN13":"CODE128",width:2,height:50,margin:0,fontSize:16,textMargin:1,displayValue:true,flat:true});
+    // viewBox faz o código escalar para o tamanho da etiqueta sem cortar
+    s.setAttribute("viewBox",`0 0 ${parseFloat(s.getAttribute("width"))} ${parseFloat(s.getAttribute("height"))}`);
+    ["style","width","height"].forEach(a=>s.removeAttribute(a)); return s.outerHTML;};
+  const um=({p})=>`<div class="etq">
+      <div class="top"><b>COLAB</b>${comPreco?`<b class="pr">${brl(p.preco)}</b>`:""}</div>
+      <div class="nm">${esc(p.nome)}</div>
+      <div class="ct">${esc(p.cor||"")}${p.cor&&p.tam?" · ":""}${p.tam?"Tam. "+esc(p.tam):""}</div>
+      <div class="bc">${svgDe(p.ean)}</div></div>`;
+  const etqs=itens.flatMap(it=>Array.from({length:it.n},()=>um(it))).join("");
+  const html=`<!doctype html><html><head><meta charset="utf-8"><title>Etiquetas — COLAB</title><style>
+    @page{size:${W}mm ${H}mm;margin:0}
+    html,body{margin:0;padding:0}
+    body{font-family:Arial,Helvetica,sans-serif;color:#000}
+    .etq{width:${W}mm;height:${H}mm;box-sizing:border-box;padding:${1.2*k}mm ${1.6*k}mm ${0.8*k}mm;display:flex;flex-direction:column;overflow:hidden;page-break-after:always;break-after:page}
+    .etq:last-child{page-break-after:auto;break-after:auto}
+    .top{display:flex;justify-content:space-between;align-items:baseline;font-size:${7.5*k}pt;line-height:1.1}
+    .top b{letter-spacing:.06em}.pr{font-size:${9*k}pt;letter-spacing:0!important}
+    .nm{font-size:${6.5*k}pt;font-weight:700;line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:${0.3*k}mm}
+    .ct{font-size:${6*k}pt;line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .bc{flex:1;min-height:0;display:flex;align-items:flex-end;justify-content:center;margin-top:${0.4*k}mm}
+    .bc svg{width:100%;height:100%;max-height:${12.5*k}mm}
+  </style></head><body>${etqs}</body></html>`;
+  const fr=document.createElement("iframe");
+  fr.style.cssText="position:fixed;right:0;bottom:0;width:0;height:0;border:0";
+  document.body.appendChild(fr);
+  fr.contentDocument.open(); fr.contentDocument.write(html); fr.contentDocument.close();
+  setTimeout(()=>{fr.contentWindow.focus(); fr.contentWindow.print(); setTimeout(()=>fr.remove(),1000);},200);
+}
+function modalEtiquetas(itens,titulo="Imprimir etiquetas",sub=""){
+  const pref=etqPref(); let tam=ETQ_TAM[pref.tam]?pref.tam:"40x25";
+  const lst=itens.map(({p,n})=>({p,n:Math.max(0,n|0)}));
+  modal(`<h3>${esc(titulo)}</h3>
+    ${sub?`<p style="margin:0;font-size:13px;color:var(--muted)">${sub}</p>`:""}
+    <div class="formrow" style="align-items:end">
+      <div class="field"><label>Tamanho da etiqueta</label><select class="inp" id="et_tam">${Object.keys(ETQ_TAM).map(t=>`<option value="${t}" ${t===tam?"selected":""}>${t.replace("x"," × ")} mm</option>`).join("")}</select></div>
+      <label class="chk" style="margin-bottom:10px"><input type="checkbox" id="et_preco" ${pref.semPreco?"":"checked"}> Mostrar preço</label>
+    </div>
+    <div class="tw" style="border:1px solid var(--border);border-radius:10px;max-height:44vh;overflow:auto"><table style="min-width:0">
+      <thead><tr><th>Produto</th><th>Código de barras</th><th class="num">Etiquetas</th></tr></thead>
+      <tbody>${lst.map((x,k)=>`<tr><td><b>${esc(x.p.nome)}</b><div class="hint">${esc(x.p.cor||"—")} · ${esc(x.p.tam||"—")} · ${brl(x.p.preco)}</div></td>
+        <td class="tnum" style="font-size:12px">${x.p.ean?esc(x.p.ean):'<span class="chip warn">sem código — será gerado</span>'}</td>
+        <td class="num"><input class="inp cnt" type="number" min="0" data-et="${k}" value="${x.n}" style="width:70px"></td></tr>`).join("")}</tbody></table></div>
+    <div class="hint">Na janela de impressão, escolha a impressora de etiquetas. Produtos sem código ganham um código interno da loja (começa com 200), que fica salvo no cadastro.</div>
+    <div class="err" id="et_err"></div>
+    <div class="row"><button class="btn ghost" data-close>Cancelar</button><button class="btn" id="et_ok"></button></div>`,"wide");
+  const total=()=>lst.reduce((s,x)=>s+x.n,0);
+  const rot=()=>{$("#et_ok").textContent=`Imprimir ${total()} etiqueta(s)`;};
+  $("#modalHost").querySelectorAll("[data-et]").forEach(x=>x.addEventListener("input",()=>{lst[+x.dataset.et].n=Math.max(0,parseInt(x.value)||0);rot();}));
+  $("#et_tam").addEventListener("change",e=>{tam=e.target.value;});
+  rot();
+  $("#et_ok").addEventListener("click",async()=>{
+    const sel=lst.filter(x=>x.n>0);
+    if(!sel.length) return $("#et_err").textContent="Informe a quantidade de etiquetas.";
+    if(total()>500) return $("#et_err").textContent="No máximo 500 etiquetas por vez.";
+    let gerados=0; sel.forEach(x=>{ if(!x.p.ean){ x.p.ean=gerarEAN(); gerados++; } });
+    const comPreco=$("#et_preco").checked; etqSalvaPref({tam,semPreco:!comPreco});
+    $("#et_ok").disabled=true; $("#et_ok").textContent="Preparando…";
+    try{ await imprimirEtiquetas(sel,tam,comPreco); closeModal(); if(current==="estoque") viewEstoque();
+      if(gerados) toast(`${gerados} produto(s) ganharam código de barras.`); }
+    catch(e){ $("#et_ok").disabled=false; rot(); $("#et_err").textContent="Não foi possível gerar as etiquetas. Verifique a internet."; }
+  });
 }
 let _xlsxLib=null;
 const carregaXlsx=()=>_xlsxLib||(_xlsxLib=new Promise((ok,erro)=>{
@@ -1220,7 +1353,8 @@ function viewPDV(){
       <div class="card"><div class="card-h"><h3>Produtos</h3><span class="hint">${cart.reduce((s,i)=>s+i.qtd,0)} peça(s)</span></div><div class="card-b" style="display:flex;flex-direction:column;gap:12px">
         <div class="scanbar">
           <span class="scan-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2M7 8v8M10 8v8M13 8v8M17 8v8"/></svg></span>
-          <input class="inp" id="v_code" autocomplete="off" placeholder="Bipe o código de barras ou digite o código + Enter" style="font-size:15px">
+          <div class="busca"><input class="inp" id="v_code" autocomplete="off" placeholder="Bipe o código de barras ou digite o nome do produto" style="font-size:15px">
+            <div class="sugest" id="v_sug" hidden></div></div>
           <button class="btn ghost" type="button" id="v_add">Adicionar</button></div>
         <div class="err" id="v_msg" style="min-height:0"></div>
         <div id="v_cart"></div>
@@ -1279,16 +1413,52 @@ function viewPDV(){
     $("#v_total").textContent=brl(total());
     document.querySelector(".card-h .hint").textContent=`${cart.reduce((s,i)=>s+i.qtd,0)} peça(s)`;
   };
-  const add=()=>{
-    const c=$("#v_code").value.trim(); if(!c)return; $("#v_code").value="";
-    const p=acharProduto(c);
-    if(!p) return msg(`Código ${c} não cadastrado.`);
+  const poe=p=>{
+    $("#v_code").value=""; fechaSug();
     const it=cart.find(i=>i.p===p), ja=it?it.qtd:0;
     if(ja+1>p.qtd) return msg(`Sem estoque de ${p.nome} (${p.cor} · ${p.tam}): ${p.qtd} un. disponíveis.`);
     if(it) it.qtd++; else cart.push({p,qtd:1,preco:p.preco});
     msg(`✓ ${p.nome} · ${p.cor} · ${p.tam}`,true); draw();
   };
-  $("#v_code").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();add();}});
+  // busca por descrição: todas as palavras digitadas precisam aparecer (nome, código, cor, tamanho, categoria)
+  let sug=[], sel=0;
+  const semAcento=s=>String(s||"").normalize("NFD").replace(/[̀-ͯ]/g,"").toLowerCase();
+  const fechaSug=()=>{sug=[];$("#v_sug").hidden=true;};
+  const desenhaSug=()=>{
+    const box=$("#v_sug");
+    box.innerHTML=sug.length?sug.map((p,k)=>`<button type="button" data-s="${k}" class="${k===sel?"on":""}" ${p.qtd>0?"":"disabled"}>
+        <span><b>${esc(p.nome)}</b><div class="hint">${esc(p.cor||"—")} · ${esc(p.tam||"—")} · ${esc(p.sku)}</div></span>
+        <span style="text-align:right;white-space:nowrap"><b class="tnum">${brl(p.preco)}</b><div class="hint">${p.qtd>0?`${p.qtd} em estoque`:"esgotado"}</div></span></button>`).join("")
+      :`<div class="vazio">Nenhum produto com “${esc($("#v_code").value.trim())}”.</div>`;
+    box.hidden=false;
+    box.querySelector("button.on")?.scrollIntoView({block:"nearest"});
+  };
+  const buscaSug=()=>{
+    const t=$("#v_code").value.trim();
+    if(t.length<2||/^\d+$/.test(t)) return fechaSug(); // só números = código de barras
+    const ps=semAcento(t).split(/\s+/);
+    sug=ESTOQUE.filter(p=>{const txt=semAcento([p.nome,p.sku,p.cor,p.tam,p.cat].join(" ")); return ps.every(x=>txt.includes(x));})
+      .sort((a,b)=>(b.qtd>0)-(a.qtd>0)||a.nome.localeCompare(b.nome,"pt-BR")).slice(0,12);
+    sel=Math.max(0,sug.findIndex(p=>p.qtd>0)); desenhaSug();
+  };
+  const add=()=>{
+    const c=$("#v_code").value.trim(); if(!c)return;
+    const p=acharProduto(c); if(p) return poe(p);           // código de barras / código exato
+    if(sug[sel]&&sug[sel].qtd>0) return poe(sug[sel]);      // item escolhido na lista
+    if(!/^\d+$/.test(c)&&!$("#v_sug").hidden) return;       // lista aberta sem item disponível
+    $("#v_code").value=""; fechaSug(); msg(`Código ${c} não cadastrado.`);
+  };
+  $("#v_code").addEventListener("input",buscaSug);
+  $("#v_code").addEventListener("keydown",e=>{
+    if(e.key==="Enter"){e.preventDefault();add();}
+    else if((e.key==="ArrowDown"||e.key==="ArrowUp")&&sug.length){
+      e.preventDefault(); const d=e.key==="ArrowDown"?1:-1;
+      for(let k=1;k<=sug.length;k++){const n=(sel+d*k+sug.length*k)%sug.length; if(sug[n].qtd>0){sel=n;break;}}
+      desenhaSug();
+    } else if(e.key==="Escape") fechaSug();
+  });
+  $("#v_sug").addEventListener("mousedown",e=>{const b=e.target.closest("button[data-s]"); if(!b||b.disabled)return; e.preventDefault(); poe(sug[+b.dataset.s]); $("#v_code").focus();});
+  $("#v_code").addEventListener("blur",()=>setTimeout(fechaSug,150));
   $("#v_add").addEventListener("click",add);
   $("#v_pct").addEventListener("input",()=>{descModo="pct";draw();});
   $("#v_desc").addEventListener("input",()=>{descModo="brl";draw();});
@@ -1475,21 +1645,22 @@ function viewImportar(){
     const eans=sel.filter(i=>i.alvo==="novo"&&i.ean).map(i=>i.ean);
     const eanDup=eans.find(e=>ESTOQUE.some(p=>p.ean===e)); if(eanDup) return err(`O código de barras ${eanDup} já está cadastrado — escolha o produto existente em "Dar entrada em".`);
     const gravar=()=>{
-      const forn=IMP.forn.trim()||"—", data=IMP.data||hojeISO();
+      const forn=IMP.forn.trim()||"—", data=IMP.data||hojeISO(), paraEtq=[];
       sel.forEach(i=>{
         let p;
         if(i.alvo==="novo"){
           let sku=String(i.cProd||"").toUpperCase().trim(); if(!sku||ESTOQUE.some(x=>x.sku===sku)) sku=sugerirCodigo(i.cat);
-          p={ean:/^\d{6,14}$/.test(i.ean)?i.ean:"",sku,nome:i.nome,cat:i.cat,cor:i.cor.trim()||"—",tam:i.tam.trim()||"Único",custo:+i.custo.toFixed(2),preco:i.preco,qtd:0,min:0,forn:forn!=="—"?forn:""};
+          p={ean:/^\d{6,14}$/.test(i.ean)?i.ean:gerarEAN(),sku,nome:i.nome,cat:i.cat,cor:i.cor.trim()||"—",tam:i.tam.trim()||"Único",custo:+i.custo.toFixed(2),preco:i.preco,qtd:0,min:0,forn:forn!=="—"?forn:""};
           ESTOQUE.push(p);
         } else { p=ESTOQUE[+i.alvo]; p.custo=+i.custo.toFixed(2); p.preco=i.preco; if(forn!=="—")p.forn=forn; }
-        p.qtd+=i.q;
+        p.qtd+=i.q; paraEtq.push({p,n:Math.round(i.q)});
         ENTRADAS.unshift({id:ENTRADAS.length+1,data,forn,sku:p.sku,nome:p.nome,qtd:i.q,custo:p.custo,preco:p.preco,nota:IMP.numero||""});
       });
       NOTAS.unshift({chave:IMP.chave,numero:IMP.numero,forn,data,origem:IMP.origem,itens:sel.length,pecas:sel.reduce((s,i)=>s+i.q,0),
         total:sel.reduce((s,i)=>s+i.q*i.custo,0),quando:agoraStr(),user:SESSION.name});
       const n=sel.length; IMP=null; current="entradas"; ENF=novoENF(); renderNav(); route();
       toast(`Nota importada: ${n} item(ns) com entrada no estoque.`);
+      modalEtiquetas(paraEtq,"Imprimir etiquetas da nota?",`Nota importada. Quer imprimir as etiquetas das ${paraEtq.reduce((s,x)=>s+x.n,0)} peça(s) que chegaram?`);
     };
     gravar();
   });
@@ -1797,8 +1968,9 @@ function modalProduto(pre={}){
   const forns=[...new Set(ENTRADAS.map(e=>e.forn).filter(f=>f&&f!=="—"))];
   modal(`<h3 id="p_title">Cadastrar produto</h3>
     <div class="g g2">
-      <div class="field"><label>Código de barras <span class="req">*</span></label>
-        <input class="inp" id="p_ean" autocomplete="off" placeholder="Bipe ou digite (EAN-13)" value="${esc(pre.ean||"")}" style="letter-spacing:.04em"></div>
+      <div class="field"><label>Código de barras</label>
+        <div style="display:flex;gap:6px"><input class="inp" id="p_ean" autocomplete="off" placeholder="Bipe, digite ou deixe vazio para gerar" value="${esc(pre.ean||"")}" style="letter-spacing:.04em">
+        <button class="btn ghost sm" type="button" id="p_gerar" title="Criar um código interno da loja" style="white-space:nowrap">Gerar</button></div></div>
       <div class="field"><label>Descrição do produto <span class="req">*</span></label>
         <input class="inp" id="p_nome" placeholder="Ex.: Camiseta Oversized Street"></div>
     </div>
@@ -1901,6 +2073,7 @@ function modalProduto(pre={}){
   };
   const checaCodigo=()=>{const p=acharProduto($("#p_ean").value); if(p){ if(p!==existente) modoEntrada(p); } else modoNovo();};
   $("#p_ean").addEventListener("input",checaCodigo);
+  $("#p_gerar").addEventListener("click",()=>{$("#p_ean").value=gerarEAN(); checaCodigo(); $("#p_nome").focus();});
   // leitor de código de barras envia Enter
   $("#p_ean").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();checaCodigo(); (existente?$("#p_qtd"):$("#p_nome")).focus();}});
   if(pre.ean) checaCodigo();
@@ -1925,6 +2098,7 @@ function modalProduto(pre={}){
         if(current==="entradas") route(); else {EF=novoEF(); ESTQ_HL=ESTOQUE.indexOf(p); current="estoque"; renderNav(); route();
           $("#row-"+ESTQ_HL)?.scrollIntoView?.({block:"center",behavior:"smooth"});}
         toast(`+${qtd} un. em ${p.nome} (${p.cor} · ${p.tam}). Agora: ${p.qtd}.`);
+        modalEtiquetas([{p,n:qtd}],"Imprimir etiquetas?",`Chegaram ${qtd} peça(s) de ${esc(p.nome)}. Quer imprimir as etiquetas agora?`);
       };
       if(Math.abs(preco-p.preco)>0.004) pedeSenha(gravar,`O preço de venda vai mudar de ${brl(p.preco)} para ${brl(preco)}. Confirme com a senha do administrador.`);
       else gravar();
@@ -1935,8 +2109,7 @@ function modalProduto(pre={}){
     const d={ean:$("#p_ean").value.trim(), nome:$("#p_nome").value.trim(), sku:sku.value.trim().toUpperCase(),
       cat:$("#p_cat").value, cor:$("#p_cor").value.trim(), tam:tam.value.trim(),
       custo:custoIn||0, preco, qtd:Math.max(0,qtd||0), min, forn:forn!=="—"?forn:""};
-    if(!d.ean) return err("Informe o código de barras.");
-    if(!/^\d{6,14}$/.test(d.ean)) return err("Código de barras deve ter só números (6 a 14 dígitos).");
+    if(d.ean&&!/^\d{6,14}$/.test(d.ean)) return err("Código de barras deve ter só números (6 a 14 dígitos).");
     if(!d.nome) return err("Informe a descrição do produto.");
     if(!d.sku) return err("Informe o código do produto.");
     if(ESTOQUE.some(p=>p.sku===d.sku)) return err("Esse código já existe. Use outro (ex.: inclua cor e tamanho).");
@@ -1944,12 +2117,14 @@ function modalProduto(pre={}){
     if(!d.tam) return err("Escolha o tamanho.");
     if(isNaN(d.preco)||d.preco<=0) return err("Informe o preço de venda.");
     pedeSenha(()=>{
+      if(!d.ean) d.ean=gerarEAN(); // sem código do fornecedor: código interno da loja
       ESTOQUE.push(d);
       if(d.qtd>0) ENTRADAS.unshift({id:ENTRADAS.length+1,data,forn,sku:d.sku,nome:d.nome,qtd:d.qtd,custo:d.custo,preco:d.preco});
       EF=novoEF(); ESTQ_HL=ESTOQUE.length-1;
       closeModal(); current="estoque"; renderNav(); route();
       $("#row-"+ESTQ_HL)?.scrollIntoView?.({block:"center",behavior:"smooth"});
       toast(`${d.nome} (${d.cor} · ${d.tam}) cadastrado.`);
+      if(d.qtd>0) modalEtiquetas([{p:d,n:d.qtd}],"Imprimir etiquetas?",`${esc(d.nome)} foi cadastrado. Quer imprimir as etiquetas agora?`);
     },"Cadastrar produto define o preço de venda. Confirme com a senha do administrador.");
   });
 }
