@@ -694,7 +694,6 @@ function viewEstoque(){
   <div class="section">
     <div class="toolbar">
       <button class="btn" id="addProd">+ Cadastrar / dar entrada</button>
-      <button class="btn ghost" id="goCats">+ Nova categoria</button>
       <button class="btn ghost" id="estEtq" title="Etiquetas dos produtos marcados (ou, sem marcação, dos filtrados)">
         <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="vertical-align:-2px;margin-right:4px"><path d="M4 6v12M8 6v12M11 6v12M15 6v12M18 6v12M21 6v12"/></svg><span id="estEtqTxt">Etiquetas</span></button>
       <button class="btn ghost sm" id="estSelClear" hidden>Desmarcar todos</button>
@@ -771,7 +770,6 @@ function viewEstoque(){
     $("#ajf_clear").addEventListener("click",()=>{AJF=novoAJF();viewEstoque();});
     $("#ajf_print").addEventListener("click",()=>imprimirAjustes(ajLista,ajAtivo));
   }
-  $("#goCats").addEventListener("click",()=>guardAdmin(()=>modalCategorias(),"Criar categorias é permitido apenas com a senha do administrador."));
   $("#addProd").addEventListener("click",()=>modalProduto());
   $("#estPrint").addEventListener("click",()=>imprimirEstoque(lista.map(x=>x.p),isAdmin,ativo));
   // seleção para etiquetas (marcados continuam marcados ao trocar de filtro)
