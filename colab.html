@@ -6,6 +6,7 @@
   --bg:#f6f5f2; --surface:#ffffff; --surface-2:#efede8; --fg:#1b1a17; --muted:#6f6a60;
   --border:#e4e0d8; --accent:#e0242b; --accent-ink:#ffffff; --accent-soft:#fde4e4;
   --good:#1f9d63; --good-soft:#e2f3e9; --warn:#c07c00; --warn-soft:#f8eecf; --crit:#d64545; --crit-soft:#f8e2e2;
+  --info:#2563eb; --info-soft:#e3ebfd;
   --shadow:0 1px 2px rgba(20,18,12,.05),0 6px 20px rgba(20,18,12,.06);
   --font-display:"Archivo","Archivo Black",system-ui,sans-serif;
   --font-body:"Figtree",system-ui,-apple-system,sans-serif;
@@ -15,6 +16,7 @@
   --bg:#141310; --surface:#1e1c18; --surface-2:#272420; --fg:#f4f1ea; --muted:#a39c8f;
   --border:#332f29; --accent:#f0443f; --accent-ink:#ffffff; --accent-soft:#3a1a1a;
   --good:#35c17e; --good-soft:#17312366; --warn:#e0a93a; --warn-soft:#3a2f1266; --crit:#ef6b6b; --crit-soft:#3a1c1c66;
+  --info:#6f9dff; --info-soft:#1b2a4a99;
   --shadow:0 1px 2px rgba(0,0,0,.3),0 8px 24px rgba(0,0,0,.35);
   color-scheme:dark;
 }}
@@ -22,6 +24,7 @@
   --bg:#141310; --surface:#1e1c18; --surface-2:#272420; --fg:#f4f1ea; --muted:#a39c8f;
   --border:#332f29; --accent:#f0443f; --accent-ink:#ffffff; --accent-soft:#3a1a1a;
   --good:#35c17e; --good-soft:#17312366; --warn:#e0a93a; --warn-soft:#3a2f1266; --crit:#ef6b6b; --crit-soft:#3a1c1c66;
+  --info:#6f9dff; --info-soft:#1b2a4a99;
   --shadow:0 1px 2px rgba(0,0,0,.3),0 8px 24px rgba(0,0,0,.35);
   color-scheme:dark;
 }
@@ -90,6 +93,14 @@ main{min-width:0;padding:0 0 60px}
   padding-block:14px;padding-left:max(24px,env(safe-area-inset-left,0px));padding-right:max(24px,env(safe-area-inset-right,0px));
   display:flex;align-items:center;gap:14px;flex-wrap:wrap}
 .topbar h2{font-size:19px;flex:1;min-width:140px}
+/* espaço ao lado do título (ex.: totais do Estoque) */
+#topExtra{flex:6;min-width:0}
+#topExtra:empty{display:none}
+.topbar:has(#topExtra:not(:empty)) h2{flex:none;min-width:0;margin-right:6px}
+#topExtra .sumtiles.mini{margin:0;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:6px}
+#topExtra .sumtiles.mini .tile{padding:5px 10px;gap:0}
+#topExtra .sumtiles.mini .tile .val{font-size:14px;white-space:nowrap}
+#topExtra .sumtiles.mini .tile .lbl{white-space:nowrap;overflow:hidden}
 .demo-tag{font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--warn);
   background:var(--warn-soft);padding:4px 9px;border-radius:999px;border:1px solid color-mix(in srgb,var(--warn) 30%,transparent)}
 .section{padding-left:max(24px,env(safe-area-inset-left,0px));padding-right:max(24px,env(safe-area-inset-right,0px));padding-top:20px;max-width:1120px}
@@ -107,7 +118,8 @@ main{min-width:0;padding:0 0 60px}
 .tile .sub{font-size:12px;color:var(--muted)}
 .dot{width:8px;height:8px;border-radius:50%;flex:none}
 .chip{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:700;padding:3px 9px;border-radius:999px}
-.chip.good{color:var(--good);background:var(--good-soft)}.chip.warn{color:var(--warn);background:var(--warn-soft)}.chip.crit{color:var(--crit);background:var(--crit-soft)}
+.chip.good{color:var(--good);background:var(--good-soft)}.chip.info{color:var(--info);background:var(--info-soft)}
+.badge.tam{color:var(--info);background:var(--info-soft)}.chip.warn{color:var(--warn);background:var(--warn-soft)}.chip.crit{color:var(--crit);background:var(--crit-soft)}
 
 .grid2{display:grid;grid-template-columns:1.4fr 1fr;gap:16px;margin-top:16px}
 .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);box-shadow:var(--shadow);overflow:hidden}
@@ -208,9 +220,32 @@ tbody tr.hl:hover{background:var(--accent-soft)}
 thead tr.fil th{padding:6px 8px 8px;background:var(--surface);text-transform:none;letter-spacing:0;font-weight:500}
 thead tr.fil .inp{padding:5px 7px;font-size:12px;border-radius:7px;min-width:64px}
 thead tr.fil select.inp{padding-right:4px}
+thead tr.fil.top th{border-bottom:0;padding-top:10px;padding-bottom:2px}
+/* tabela do Estoque compacta: cabe na tela sem rolar para o lado */
+table.estq{min-width:0;font-size:12.5px}
+table.estq th,table.estq td{padding-left:7px;padding-right:7px}
+table.estq tbody td,table.estq tfoot td{padding-top:8px;padding-bottom:8px}
+table.estq thead th{font-size:10.5px}
+table.estq tr.fil .inp{width:100%;min-width:56px;max-width:150px;font-size:11.5px;padding:4px 5px}
+table.estq tbody td:nth-child(2){min-width:155px;max-width:220px}
+table.estq tr.fil .busca{position:relative}
+table.estq tr.fil .busca svg{position:absolute;left:9px;top:50%;transform:translateY(-50%);width:15px;height:15px;color:var(--muted);pointer-events:none}
+table.estq tr.fil .busca .inp{max-width:none;padding:7px 10px 7px 30px;font-size:13px}
+table.estq td.num{white-space:nowrap}
+/* variações do mesmo modelo ficam juntas: linha fina entre elas, linha mais forte entre modelos */
+table.estq tbody td{border-bottom:0;border-top:1px solid var(--border)}
+table.estq tbody tr:first-child td{border-top:0}
+table.estq tbody tr.mod-cont td{border-top-color:color-mix(in srgb,var(--border) 45%,transparent);padding-top:5px;padding-bottom:5px}
+table.estq tbody tr.mod-ini td{border-top:2px solid color-mix(in srgb,var(--muted) 35%,transparent)}
 tfoot td{padding:11px 14px;border-top:2px solid var(--border);background:var(--surface-2)}
 .sumtiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin-bottom:14px}
 .sumtiles .tile{padding:11px 14px;gap:3px}.sumtiles .tile .val{font-size:20px}
+/* totais compactos (Estoque): tudo numa linha só */
+.sumtiles.mini{grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;margin-bottom:12px}
+.sumtiles.mini .tile{padding:8px 12px;gap:2px;box-shadow:none}
+.sumtiles.mini .tile .lbl{font-size:10px}
+.sumtiles.mini .tile .val{font-size:15px}
+.sumtiles.mini .tile .sub{font-size:10.5px}
 /* modal compacto (cadastro de produto) — cabe em tela de notebook sem rolar */
 .modal.compact{max-width:760px;padding:16px 20px;gap:10px}
 .modal.compact h3{font-size:16px}
@@ -277,6 +312,7 @@ tfoot td{padding:11px 14px;border-top:2px solid var(--border);background:var(--s
   <main>
     <div class="topbar">
       <h2 id="pageTitle">Painel</h2>
+      <div id="topExtra"></div>
       <button class="icon-btn" id="theme" title="Tema">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
       </button>
@@ -495,6 +531,7 @@ $("#theme").addEventListener("click",()=>{
 function route(){
   const titles={dash:"Painel",pdv:"Nova venda",vendas:"Vendas & Caixa",estoque:"Estoque",entradas:"Relatório de entradas",importar:"Importar nota / cupom",inventario:"Inventário",despesas:"Despesas",fech:"Fechamento do mês",comissao:"Comissão",conta:SESSION.role==="admin"?"Painel de controle — usuários":"Minha conta"};
   $("#pageTitle").textContent=titles[current];
+  $("#topExtra").innerHTML="";
   ({dash:viewDash,pdv:viewPDV,importar:viewImportar,vendas:viewVendas,estoque:viewEstoque,entradas:viewEntradas,inventario:viewInventario,despesas:viewDespesas,fech:viewFech,comissao:viewComissao,conta:viewConta}[current])();
 }
 
@@ -662,6 +699,10 @@ const novoEF=()=>({q:"",ean:"",cor:"",tam:"",cat:"",forn:"",sit:""});
 // fornecedor do produto: o do cadastro ou o da última entrada
 const fornDe=p=>p.forn||(ENTRADAS.filter(e=>e.sku===p.sku&&e.forn&&e.forn!=="—").sort((a,b)=>b.data.localeCompare(a.data))[0]||{}).forn||"";
 let EF=novoEF(), ESTQ_HL=null, ESTQ_SEL=new Set(); // ESTQ_SEL: códigos (sku) marcados para etiqueta
+// modelo = mesma descrição (as variações de cor/tamanho ficam juntas na lista)
+const chaveModelo=p=>String(p.nome||"").trim().toLowerCase();
+// cor para exibir: tira a marca do início quando ela já está no nome (ex.: "PUMA White-Archive Green" → "White-Archive Green")
+const corCurta=p=>{const c=String(p.cor||"").trim(), w=c.split(/\s+/); return w.length>1&&String(p.nome||"").toLowerCase().includes(w[0].toLowerCase())?w.slice(1).join(" "):(c||"—");};
 const novoAJF=()=>({de:"",ate:"",motivo:"",user:""});
 let AJF=novoAJF();
 function imprimirAjustes(lista,ativo){
@@ -679,21 +720,46 @@ function viewEstoque(){
   const isAdmin=SESSION.role==="admin";
   const q=EF.q.toLowerCase();
   const lista=ESTOQUE.map((p,i)=>({p,i})).filter(({p})=>
-    (!q||[p.nome,p.sku].join(" ").toLowerCase().includes(q)) && (!EF.ean||String(p.ean||"").includes(EF.ean.trim())) &&
+    (!q||[p.nome,p.sku,p.ean||""].join(" ").toLowerCase().includes(q)) && (!EF.ean||String(p.ean||"").includes(EF.ean.trim())) &&
     (!EF.cor||p.cor===EF.cor) && (!EF.tam||p.tam===EF.tam) && (!EF.cat||p.cat===EF.cat) && (!EF.forn||fornDe(p)===EF.forn) &&
     (!EF.sit||(EF.sit==="alerta"?situacao(p)!=="OK":situacao(p)===EF.sit)));
   const ativo=Object.values(EF).some(Boolean);
   const pecas=lista.reduce((s,{p})=>s+p.qtd,0), totCusto=lista.reduce((s,{p})=>s+p.qtd*p.custo,0), totVenda=lista.reduce((s,{p})=>s+p.qtd*p.preco,0);
   const uniq=k=>[...new Set(ESTOQUE.map(p=>p[k]).filter(Boolean))].sort((a,b)=>String(a).localeCompare(String(b),"pt-BR",{numeric:true}));
-  const ncol=isAdmin?12:11;
+  const ncol=isAdmin?11:10;
   ESTQ_SEL.forEach(s=>{ if(!ESTOQUE.some(p=>p.sku===s)) ESTQ_SEL.delete(s); });
   const ajLista=AJUSTES.filter(a=>pfMatch(a.data,AJF)&&(!AJF.motivo||a.motivo===AJF.motivo)&&(!AJF.user||a.user===AJF.user));
   const ajAtivo=Object.values(AJF).some(Boolean);
   const fornsE=[...new Set(ESTOQUE.map(fornDe).filter(Boolean))].sort((a,b)=>a.localeCompare(b,"pt-BR"));
+  const ICO_EDIT=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>`;
+  const stDe=q=>q.qtd===0?["stock-out","Esgotado","crit"]:q.qtd<=q.min?["stock-low","Baixo","warn"]:["stock-ok","OK","good"];
+  // mesmo modelo fica junto: ordena por descrição, depois tamanho, depois cor
+  lista.sort((a,b)=>chaveModelo(a.p).localeCompare(chaveModelo(b.p),"pt-BR",{numeric:true})
+    ||ordTam(a.p.tam||"",b.p.tam||"")||String(a.p.cor||"").localeCompare(String(b.p.cor||""),"pt-BR"));
+  // uma variação; o nome do modelo aparece só na primeira linha dele (cont = continuação do mesmo modelo)
+  const linha=({p,i},k)=>{
+    const st=stDe(p), cont=k>0&&chaveModelo(lista[k-1].p)===chaveModelo(p);
+    const novoMod=k>0&&!cont;
+    return `<tr id="row-${i}" class="${ESTQ_HL===i?'hl':''}${novoMod?' mod-ini':''}${cont?' mod-cont':''}" title="${esc(p.nome)}">
+      <td><input type="checkbox" data-sel="${esc(p.sku)}" ${ESTQ_SEL.has(p.sku)?"checked":""} title="Marcar para etiqueta" style="width:17px;height:17px;cursor:pointer"></td>
+      <td>${cont?`<div style="color:var(--muted);font-size:11px;padding-left:10px">${esc(p.sku)}</div>`
+        :`<b>${esc(p.nome)}</b><div style="color:var(--muted);font-size:11px">${esc(p.sku)}</div>`}</td>
+      <td class="tnum" style="font-size:12px;white-space:nowrap">${esc(p.ean||"—")}</td>
+      <td>${esc(corCurta(p))}</td>
+      <td><span class="badge tam">${esc(p.tam||"—")}</span></td>
+      <td>${esc(p.cat)}</td>
+      <td>${esc(fornDe(p)||"—")}</td>
+      ${isAdmin?`<td class="num tnum">${brl(p.custo)}</td>`:""}
+      <td class="num tnum">${brl(p.preco)}</td>
+      <td class="num tnum ${st[0]}" title="${st[1]}">${p.qtd}</td>
+      <td style="text-align:right"><button class="icon-btn" style="width:30px;height:30px" data-editprod="${i}" title="Editar produto">${ICO_EDIT}</button></td></tr>`;
+  };
   $("#view").innerHTML=`
   <div class="section">
     <div class="toolbar">
       <button class="btn" id="addProd">+ Cadastrar / dar entrada</button>
+      <button class="btn ghost" id="estConsulta" title="Bipe um produto e veja todas as numerações do mesmo modelo">
+        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="vertical-align:-2px;margin-right:4px"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>Consultar numeração</button>
       <button class="btn ghost" id="estEtq" title="Etiquetas dos produtos marcados (ou, sem marcação, dos filtrados)">
         <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="vertical-align:-2px;margin-right:4px"><path d="M4 6v12M8 6v12M11 6v12M15 6v12M18 6v12M21 6v12"/></svg><span id="estEtqTxt">Etiquetas</span></button>
       <button class="btn ghost sm" id="estSelClear" hidden>Desmarcar todos</button>
@@ -705,49 +771,25 @@ function viewEstoque(){
         <span class="lock"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>Alterar preço ou quantidade exige senha do administrador</span>
       </div>
     </div>
-    <div class="sumtiles">
-      <div class="tile"><div class="lbl">Produtos${ativo?" (filtro)":""}</div><div class="val tnum">${lista.length}<span class="hint" style="font-family:var(--font-body);font-weight:500"> de ${ESTOQUE.length}</span></div></div>
-      <div class="tile"><div class="lbl">Peças em estoque</div><div class="val tnum">${n0(pecas)}</div></div>
-      ${isAdmin?`<div class="tile"><div class="lbl"><span class="dot" style="background:var(--warn)"></span>Total a custo</div><div class="val tnum">${brl(totCusto)}</div></div>`:""}
-      <div class="tile"><div class="lbl"><span class="dot" style="background:var(--good)"></span>Total a preço de venda</div><div class="val tnum">${brl(totVenda)}</div></div>
-      ${isAdmin?`<div class="tile"><div class="lbl">Lucro potencial</div><div class="val tnum">${brl(totVenda-totCusto)}</div><div class="sub">${totVenda?Math.round((totVenda-totCusto)/totVenda*100):0}% de margem</div></div>`:""}
-    </div>
-    <div class="card"><div class="card-b pad0"><div class="tw"><table>
-      <thead><tr><th style="width:34px"><input type="checkbox" id="estSelAll" title="Marcar todos os produtos da lista" style="width:17px;height:17px;cursor:pointer"></th><th>Produto</th><th>Cód. barras</th><th>Cor</th><th>Tam.</th><th>Categoria</th><th>Fornecedor</th>${isAdmin?'<th class="num">Custo</th>':''}<th class="num">Preço venda</th><th class="num">Estoque</th><th>Situação</th><th></th></tr>
-      <tr class="fil">
-        <th></th>
-        <th><input class="inp" id="ef_q" placeholder="Nome ou código" value="${esc(EF.q)}"></th>
-        <th><input class="inp" id="ef_ean" placeholder="Cód. barras" value="${esc(EF.ean)}" style="width:110px"></th>
+    <div class="card"><div class="card-b pad0"><div class="tw"><table class="estq">
+      <thead><tr class="fil top">
+        <th colspan="3"><div class="busca"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+          <input class="inp" id="ef_q" placeholder="Nome, código ou cód. de barras" title="Pesquise por nome, código ou código de barras (pode bipar)" value="${esc(EF.q)}" autocomplete="off"></div></th>
         <th>${optSel("ef_cor",uniq("cor"),EF.cor)}</th>
         <th>${optSel("ef_tam",uniq("tam"),EF.tam)}</th>
         <th>${optSel("ef_cat",CATEGORIAS.filter(c=>ESTOQUE.some(p=>p.cat===c)),EF.cat,"Todas")}</th>
         <th>${optSel("ef_forn",fornsE,EF.forn)}</th>
-        ${isAdmin?"<th></th>":""}<th></th><th></th>
-        <th>${optSel("ef_sit",[["OK","OK"],["Baixo","Baixo"],["Esgotado","Esgotado"],["alerta","Baixo + esgotado"]],EF.sit)}</th><th></th>
-      </tr></thead>
-      <tbody>${lista.length?lista.map(({p,i})=>{
-        const st=p.qtd===0?["stock-out","Esgotado","crit"]:p.qtd<=p.min?["stock-low","Baixo","warn"]:["stock-ok","OK","good"];
-        return `<tr id="row-${i}" class="${ESTQ_HL===i?'hl':''}">
-          <td><input type="checkbox" data-sel="${esc(p.sku)}" ${ESTQ_SEL.has(p.sku)?"checked":""} title="Marcar para etiqueta" style="width:17px;height:17px;cursor:pointer"></td>
-          <td><b>${esc(p.nome)}</b><div style="color:var(--muted);font-size:11px">${esc(p.sku)}</div></td>
-          <td class="tnum" style="font-size:12px;white-space:nowrap">${esc(p.ean||"—")}</td>
-          <td>${esc(p.cor||"—")}</td>
-          <td><span class="badge">${esc(p.tam||"—")}</span></td>
-          <td>${esc(p.cat)}</td>
-          <td>${esc(fornDe(p)||"—")}</td>
-          ${isAdmin?`<td class="num tnum">${brl(p.custo)}</td>`:""}
-          <td class="num tnum">${brl(p.preco)}</td>
-          <td class="num tnum ${st[0]}">${p.qtd}</td>
-          <td><span class="chip ${st[2]}">${st[1]}</span></td>
-          <td style="text-align:right"><button class="icon-btn" style="width:30px;height:30px" data-editprod="${i}" title="Editar produto">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg></button></td></tr>`;
-      }).join(""):`<tr><td colspan="${ncol}" style="text-align:center;color:var(--muted);padding:24px">${ESTOQUE.length?"Nenhum produto com esses filtros.":"Estoque vazio. Lance os produtos pela aba Importar nota ou em + Cadastrar / dar entrada."}</td></tr>`}</tbody>
+        ${isAdmin?"<th></th>":""}<th></th>
+        <th>${optSel("ef_sit",[["OK","OK"],["Baixo","Baixo"],["Esgotado","Esgotado"],["alerta","Baixo + esgotado"]],EF.sit,"Situação")}</th><th></th>
+      </tr>
+      <tr><th style="width:34px"><input type="checkbox" id="estSelAll" title="Marcar todos os produtos da lista" style="width:17px;height:17px;cursor:pointer"></th><th>Produto</th><th>Cód. barras</th><th>Cor</th><th>Tam.</th><th>Categoria</th><th>Fornecedor</th>${isAdmin?'<th class="num">Custo</th>':''}<th class="num">Preço venda</th><th class="num" title="Verde = OK · amarelo = baixo · vermelho = esgotado">Estoque</th><th></th></tr></thead>
+      <tbody>${lista.length?lista.map(linha).join(""):`<tr><td colspan="${ncol}" style="text-align:center;color:var(--muted);padding:24px">${ESTOQUE.length?"Nenhum produto com esses filtros.":"Estoque vazio. Lance os produtos pela aba Importar nota ou em + Cadastrar / dar entrada."}</td></tr>`}</tbody>
       <tfoot><tr>
         <td colspan="7" style="font-weight:700">Total ${ativo?"filtrado":"em estoque"} <span class="hint" style="font-weight:500">· valores × quantidade</span>
           ${ativo?`<button class="btn ghost sm" id="ef_clear" style="margin-left:8px">Limpar filtros</button>`:""}</td>
         ${isAdmin?`<td class="num tnum" style="font-weight:800">${brl(totCusto)}</td>`:""}
         <td class="num tnum" style="font-weight:800">${brl(totVenda)}</td>
-        <td class="num tnum" style="font-weight:800">${n0(pecas)}</td><td></td><td></td></tr></tfoot>
+        <td class="num tnum" style="font-weight:800">${n0(pecas)}</td><td></td></tr></tfoot>
     </table></div></div></div>
     ${AJUSTES.length?`<div class="card" style="margin-top:16px" id="ajCard"><div class="card-h"><h3>Ajustes de estoque</h3><span class="hint">autorizados com senha do administrador</span></div>
       <div class="card-b" style="border-bottom:1px solid var(--border)"><div class="datebar">
@@ -770,7 +812,16 @@ function viewEstoque(){
     $("#ajf_clear").addEventListener("click",()=>{AJF=novoAJF();viewEstoque();});
     $("#ajf_print").addEventListener("click",()=>imprimirAjustes(ajLista,ajAtivo));
   }
+  // totais do estoque ficam no cabeçalho, ao lado do título
+  $("#topExtra").innerHTML=`<div class="sumtiles mini">
+      <div class="tile"><div class="lbl">Produtos${ativo?" (filtro)":""}</div><div class="val tnum">${lista.length}<span class="hint" style="font-family:var(--font-body);font-weight:500"> de ${ESTOQUE.length}</span></div></div>
+      <div class="tile"><div class="lbl">Peças em estoque</div><div class="val tnum">${n0(pecas)}</div></div>
+      ${isAdmin?`<div class="tile"><div class="lbl"><span class="dot" style="background:var(--warn)"></span>Total a custo</div><div class="val tnum">${brl(totCusto)}</div></div>`:""}
+      <div class="tile" title="Total a preço de venda"><div class="lbl"><span class="dot" style="background:var(--good)"></span>Total a venda</div><div class="val tnum">${brl(totVenda)}</div></div>
+      ${isAdmin?`<div class="tile" title="Margem: ${totVenda?Math.round((totVenda-totCusto)/totVenda*100):0}%"><div class="lbl">Lucro potencial · ${totVenda?Math.round((totVenda-totCusto)/totVenda*100):0}%</div><div class="val tnum">${brl(totVenda-totCusto)}</div></div>`:""}
+    </div>`;
   $("#addProd").addEventListener("click",()=>modalProduto());
+  $("#estConsulta").addEventListener("click",()=>modalConsulta());
   $("#estPrint").addEventListener("click",()=>imprimirEstoque(lista.map(x=>x.p),isAdmin,ativo));
   // seleção para etiquetas (marcados continuam marcados ao trocar de filtro)
   const selUI=()=>{
@@ -797,7 +848,7 @@ function viewEstoque(){
       "Nenhum produto marcado: vale a lista filtrada, uma etiqueta por peça em estoque. Ajuste as quantidades se precisar.");
   });
   $("#estXlsx").addEventListener("click",()=>excelEstoque(lista.map(x=>x.p),isAdmin));
-  [["ef_q","q","input"],["ef_ean","ean","input"],["ef_cor","cor","change"],["ef_tam","tam","change"],["ef_cat","cat","change"],["ef_forn","forn","change"],["ef_sit","sit","change"]]
+  [["ef_q","q","input"],["ef_cor","cor","change"],["ef_tam","tam","change"],["ef_cat","cat","change"],["ef_forn","forn","change"],["ef_sit","sit","change"]]
     .forEach(([id,k,ev])=>$("#"+id).addEventListener(ev,e=>{EF[k]=e.target.value;ESTQ_HL=null;rerender(()=>viewEstoque(false));}));
   $("#ef_clear")?.addEventListener("click",()=>{EF=novoEF();viewEstoque();});
   $("#view").querySelectorAll("[data-editprod]").forEach(b=>b.addEventListener("click",()=>modalEditarProduto(+b.dataset.editprod)));
@@ -1516,6 +1567,42 @@ const parseNum=v=>parseFloat(String(v).replace(",","."));
 function acharProduto(code){
   const c=String(code).trim(); if(!c)return null;
   return ESTOQUE.find(p=>p.ean===c)||ESTOQUE.find(p=>p.sku.toLowerCase()===c.toLowerCase())||null;
+}
+/* Consultar numeração: bipa a peça exposta e mostra todas as numerações do mesmo modelo (mesma descrição) */
+const ordTam=(a,b)=>{const na=+a,nb=+b; if(!isNaN(na)&&!isNaN(nb))return na-nb;
+  const ia=TAMANHOS.indexOf(a),ib=TAMANHOS.indexOf(b); return (ia<0?99:ia)-(ib<0?99:ib)||String(a).localeCompare(String(b));};
+function modalConsulta(){
+  modal(`<h3>Consultar numeração</h3>
+    <p class="hint" style="margin:0 0 10px">Bipe o código de barras da peça exposta (ou digite o código / nome do modelo).</p>
+    <div class="scanbar"><input class="inp" id="cq_in" autocomplete="off" placeholder="Bipe aqui…"><button class="btn" id="cq_ok">Consultar</button></div>
+    <div id="cq_res" style="margin-top:14px"></div>
+    <div class="row"><button class="btn ghost" data-close>Fechar</button></div>`,"wide");
+  const inp=$("#cq_in");
+  const mostra=()=>{
+    const v=inp.value.trim(); if(!v) return;
+    let p=acharProduto(v);
+    if(!p){ const q=v.toLowerCase(), nomes=[...new Set(ESTOQUE.filter(x=>x.nome.toLowerCase().includes(q)).map(x=>x.nome))];
+      if(nomes.length===1) p=ESTOQUE.find(x=>x.nome===nomes[0]);
+      else { $("#cq_res").innerHTML=`<div class="infobox" style="color:var(--crit)">${nomes.length?`Vários modelos com “${esc(v)}”: ${nomes.slice(0,6).map(esc).join(", ")}${nomes.length>6?"…":""}. Digite mais do nome.`:`Nenhum produto com o código “${esc(v)}”.`}</div>`; inp.select(); return; } }
+    const chave=p.nome.trim().toLowerCase(), mod=ESTOQUE.filter(x=>x.nome.trim().toLowerCase()===chave);
+    const tams=[...new Set(mod.map(x=>x.tam||"—"))].sort(ordTam);
+    const cores=[...new Set(mod.map(x=>x.cor||"—"))].sort((a,b)=>(a===(p.cor||"—")?-1:b===(p.cor||"—")?1:a.localeCompare(b,"pt-BR")));
+    const cel=(cor,t)=>{const it=mod.filter(x=>(x.cor||"—")===cor&&(x.tam||"—")===t); if(!it.length) return `<td class="num" style="color:var(--muted)">—</td>`;
+      const q=it.reduce((s,x)=>s+x.qtd,0), cls=q===0?"crit":q<=Math.max(...it.map(x=>x.min||0))?"warn":"info";
+      return `<td class="num"><span class="chip ${cls}" style="font-size:13px">${q}</span></td>`;};
+    const tot=mod.reduce((s,x)=>s+x.qtd,0);
+    $("#cq_res").innerHTML=`<div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:8px">
+        <div><b style="font-size:15px">${esc(p.nome)}</b><div class="hint">Bipado: ${esc(p.cor||"—")} · ${esc(p.tam||"—")} · ${brl(p.preco)}</div></div>
+        <span class="hint">${tot} peça(s) no total</span></div>
+      <div class="tw" style="border:1px solid var(--border);border-radius:10px"><table style="min-width:0">
+        <thead><tr><th>Cor</th>${tams.map(t=>`<th class="num">${esc(t)}</th>`).join("")}</tr></thead>
+        <tbody>${cores.map(c=>`<tr class="${c===(p.cor||"—")?"hl":""}"><td><b>${esc(c)}</b></td>${tams.map(t=>cel(c,t)).join("")}</tr>`).join("")}</tbody></table></div>
+      <div class="hint" style="margin-top:8px">Número = peças em estoque · <span style="color:var(--crit)">0 = esgotado</span> · — = numeração não cadastrada</div>`;
+    inp.value=""; inp.focus();
+  };
+  $("#cq_ok").addEventListener("click",mostra);
+  inp.addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();mostra();}});
+  setTimeout(()=>inp.focus(),50);
 }
 /* ---------------- IMPORTAR NOTA (XML NF-e / NFC-e / CF-e SAT) ---------------- */
 let NOTAS=[];
