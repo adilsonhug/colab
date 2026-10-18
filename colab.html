@@ -223,11 +223,12 @@ thead tr.fil select.inp{padding-right:4px}
 thead tr.fil.top th{border-bottom:0;padding-top:10px;padding-bottom:2px}
 /* tabela do Estoque compacta: cabe na tela sem rolar para o lado */
 table.estq{min-width:0;font-size:12.5px}
-table.estq th,table.estq td{padding-left:7px;padding-right:7px}
+table.estq th,table.estq td{padding-left:6px;padding-right:6px}
 table.estq tbody td,table.estq tfoot td{padding-top:8px;padding-bottom:8px}
 table.estq thead th{font-size:10.5px}
-table.estq tr.fil .inp{width:100%;min-width:56px;max-width:150px;font-size:11.5px;padding:4px 5px}
-table.estq tbody td:nth-child(2){min-width:155px;max-width:220px}
+table.estq tr.fil .inp{width:100%;min-width:52px;max-width:150px;font-size:11.5px;padding:4px 5px}
+table.estq tbody td:nth-child(2){min-width:140px;max-width:210px}
+table.estq tbody td:nth-child(3){font-size:11px!important}
 table.estq tr.fil .busca{position:relative}
 table.estq tr.fil .busca svg{position:absolute;left:9px;top:50%;transform:translateY(-50%);width:15px;height:15px;color:var(--muted);pointer-events:none}
 table.estq tr.fil .busca .inp{max-width:none;padding:7px 10px 7px 30px;font-size:13px}
@@ -698,7 +699,10 @@ const semAcento=s=>String(s??"").normalize("NFD").replace(/[̀-ͯ]/g,"").toLower
 const busca=(campos,q)=>{const t=semAcento([].concat(campos).join(" ")); return semAcento(q).split(/\s+/).filter(Boolean).every(w=>t.includes(w));};
 const optSel=(id,opts,val,todos="Todos")=>`<select class="inp" id="${id}"><option value="">${todos}</option>${opts.map(o=>{const [v,l]=Array.isArray(o)?o:[o,o];return `<option value="${esc(v)}" ${v===val?"selected":""}>${esc(l)}</option>`;}).join("")}</select>`;
 const situacao=p=>p.qtd===0?"Esgotado":p.qtd<=p.min?"Baixo":"OK";
-const novoEF=()=>({q:"",ean:"",cor:"",tam:"",cat:"",forn:"",sit:""});
+const novoEF=()=>({q:"",ean:"",marca:"",cor:"",tam:"",cat:"",forn:"",sit:""});
+// marcas já cadastradas (para sugestões e filtro), sem repetir maiúscula/minúscula
+const marcasCad=()=>{const m=new Map(); ESTOQUE.forEach(p=>{const v=String(p.marca||"").trim(); if(v&&!m.has(v.toLowerCase()))m.set(v.toLowerCase(),v);});
+  return [...m.values()].sort((a,b)=>a.localeCompare(b,"pt-BR"));};
 // fornecedor do produto: o do cadastro ou o da última entrada
 const fornDe=p=>p.forn||(ENTRADAS.filter(e=>e.sku===p.sku&&e.forn&&e.forn!=="—").sort((a,b)=>b.data.localeCompare(a.data))[0]||{}).forn||"";
 let EF=novoEF(), ESTQ_HL=null, ESTQ_SEL=new Set(); // ESTQ_SEL: códigos (sku) marcados para etiqueta
@@ -723,13 +727,14 @@ function viewEstoque(){
   const isAdmin=SESSION.role==="admin";
   const q=EF.q.trim();
   const lista=ESTOQUE.map((p,i)=>({p,i})).filter(({p})=>
-    (!q||busca([p.nome,p.sku,p.ean,p.cor,p.tam],q)) && (!EF.ean||String(p.ean||"").includes(EF.ean.trim())) &&
+    (!q||busca([p.nome,p.marca,p.sku,p.ean,p.cor,p.tam],q)) && (!EF.ean||String(p.ean||"").includes(EF.ean.trim())) &&
+    (!EF.marca||String(p.marca||"").trim().toLowerCase()===EF.marca.toLowerCase()) &&
     (!EF.cor||p.cor===EF.cor) && (!EF.tam||p.tam===EF.tam) && (!EF.cat||p.cat===EF.cat) && (!EF.forn||fornDe(p)===EF.forn) &&
     (!EF.sit||(EF.sit==="alerta"?situacao(p)!=="OK":situacao(p)===EF.sit)));
   const ativo=Object.values(EF).some(Boolean);
   const pecas=lista.reduce((s,{p})=>s+p.qtd,0), totCusto=lista.reduce((s,{p})=>s+p.qtd*p.custo,0), totVenda=lista.reduce((s,{p})=>s+p.qtd*p.preco,0);
   const uniq=k=>[...new Set(ESTOQUE.map(p=>p[k]).filter(Boolean))].sort((a,b)=>String(a).localeCompare(String(b),"pt-BR",{numeric:true}));
-  const ncol=isAdmin?11:10;
+  const ncol=isAdmin?12:11;
   ESTQ_SEL.forEach(s=>{ if(!ESTOQUE.some(p=>p.sku===s)) ESTQ_SEL.delete(s); });
   const ajLista=AJUSTES.filter(a=>pfMatch(a.data,AJF)&&(!AJF.motivo||a.motivo===AJF.motivo)&&(!AJF.user||a.user===AJF.user));
   const ajAtivo=Object.values(AJF).some(Boolean);
@@ -752,6 +757,7 @@ function viewEstoque(){
       <td><span class="badge tam">${esc(p.tam||"—")}</span></td>
       <td>${esc(p.cat)}</td>
       <td>${esc(fornDe(p)||"—")}</td>
+      <td>${esc(p.marca||"—")}</td>
       ${isAdmin?`<td class="num tnum">${brl(p.custo)}</td>`:""}
       <td class="num tnum">${brl(p.preco)}</td>
       <td class="num tnum ${st[0]}" title="${st[1]}">${p.qtd}</td>
@@ -777,18 +783,19 @@ function viewEstoque(){
     <div class="card"><div class="card-b pad0"><div class="tw"><table class="estq">
       <thead><tr class="fil top">
         <th colspan="3"><div class="busca"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
-          <input class="inp" id="ef_q" placeholder="Nome, código ou cód. de barras" title="Pesquise por nome, código ou código de barras (pode bipar)" value="${esc(EF.q)}" autocomplete="off"></div></th>
+          <input class="inp" id="ef_q" placeholder="Nome, código ou cód. de barras" title="Pesquise por nome, marca, código ou código de barras (pode bipar)" value="${esc(EF.q)}" autocomplete="off"></div></th>
         <th>${optSel("ef_cor",uniq("cor"),EF.cor)}</th>
         <th>${optSel("ef_tam",uniq("tam"),EF.tam)}</th>
         <th>${optSel("ef_cat",CATEGORIAS.filter(c=>ESTOQUE.some(p=>p.cat===c)),EF.cat,"Todas")}</th>
         <th>${optSel("ef_forn",fornsE,EF.forn)}</th>
+        <th>${optSel("ef_marca",marcasCad(),EF.marca,"Todas")}</th>
         ${isAdmin?"<th></th>":""}<th></th>
         <th>${optSel("ef_sit",[["OK","OK"],["Baixo","Baixo"],["Esgotado","Esgotado"],["alerta","Baixo + esgotado"]],EF.sit,"Situação")}</th><th></th>
       </tr>
-      <tr><th style="width:34px"><input type="checkbox" id="estSelAll" title="Marcar todos os produtos da lista" style="width:17px;height:17px;cursor:pointer"></th><th>Produto</th><th>Cód. barras</th><th>Cor</th><th>Tam.</th><th>Categoria</th><th>Fornecedor</th>${isAdmin?'<th class="num">Custo</th>':''}<th class="num">Preço venda</th><th class="num" title="Verde = OK · amarelo = baixo · vermelho = esgotado">Estoque</th><th></th></tr></thead>
+      <tr><th style="width:34px"><input type="checkbox" id="estSelAll" title="Marcar todos os produtos da lista" style="width:17px;height:17px;cursor:pointer"></th><th>Produto</th><th>Cód. barras</th><th>Cor</th><th>Tam.</th><th>Categoria</th><th>Fornecedor</th><th>Marca</th>${isAdmin?'<th class="num">Custo</th>':''}<th class="num">Preço venda</th><th class="num" title="Verde = OK · amarelo = baixo · vermelho = esgotado">Estoque</th><th></th></tr></thead>
       <tbody>${lista.length?lista.map(linha).join(""):`<tr><td colspan="${ncol}" style="text-align:center;color:var(--muted);padding:24px">${ESTOQUE.length?"Nenhum produto com esses filtros.":"Estoque vazio. Lance os produtos pela aba Importar nota ou em + Cadastrar / dar entrada."}</td></tr>`}</tbody>
       <tfoot><tr>
-        <td colspan="7" style="font-weight:700">Total ${ativo?"filtrado":"em estoque"} <span class="hint" style="font-weight:500">· valores × quantidade</span>
+        <td colspan="8" style="font-weight:700">Total ${ativo?"filtrado":"em estoque"} <span class="hint" style="font-weight:500">· valores × quantidade</span>
           ${ativo?`<button class="btn ghost sm" id="ef_clear" style="margin-left:8px">Limpar filtros</button>`:""}</td>
         ${isAdmin?`<td class="num tnum" style="font-weight:800">${brl(totCusto)}</td>`:""}
         <td class="num tnum" style="font-weight:800">${brl(totVenda)}</td>
@@ -851,7 +858,7 @@ function viewEstoque(){
       "Nenhum produto marcado: vale a lista filtrada, uma etiqueta por peça em estoque. Ajuste as quantidades se precisar.");
   });
   $("#estXlsx").addEventListener("click",()=>excelEstoque(lista.map(x=>x.p),isAdmin));
-  [["ef_q","q","input"],["ef_cor","cor","change"],["ef_tam","tam","change"],["ef_cat","cat","change"],["ef_forn","forn","change"],["ef_sit","sit","change"]]
+  [["ef_q","q","input"],["ef_marca","marca","change"],["ef_cor","cor","change"],["ef_tam","tam","change"],["ef_cat","cat","change"],["ef_forn","forn","change"],["ef_sit","sit","change"]]
     .forEach(([id,k,ev])=>$("#"+id).addEventListener(ev,e=>{EF[k]=e.target.value;ESTQ_HL=null;rerender(()=>viewEstoque(false));}));
   $("#ef_clear")?.addEventListener("click",()=>{EF=novoEF();viewEstoque();});
   $("#view").querySelectorAll("[data-editprod]").forEach(b=>b.addEventListener("click",()=>modalEditarProduto(+b.dataset.editprod)));
@@ -877,8 +884,9 @@ function modalEditarProduto(i){
       <div class="field"><label>Categoria</label><select class="inp" id="e_cat">${cats.map(c=>`<option ${c===p.cat?"selected":""}>${esc(c)}</option>`).join("")}</select></div>
       <div class="field"><label>Cor <span class="req">*</span></label><input class="inp" id="e_cor" list="e_cores" value="${esc(p.cor||"")}"><datalist id="e_cores">${cores.map(c=>`<option value="${esc(c)}">`).join("")}</datalist></div>
     </div>
-    <div class="g g2">
+    <div class="g g3">
       <div class="field"><label>Tamanho <span class="req">*</span></label><input class="inp" id="e_tam" value="${esc(p.tam||"")}"></div>
+      <div class="field"><label>Marca</label><input class="inp" id="e_marca" list="e_marcas" placeholder="Ex.: Puma" value="${esc(p.marca||"")}"><datalist id="e_marcas">${marcasCad().map(m=>`<option value="${esc(m)}">`).join("")}</datalist></div>
       <div class="field"><label>Fornecedor</label><input class="inp" id="e_forn" list="e_forns" value="${esc(fornDe(p))}"><datalist id="e_forns">${forns.map(f=>`<option value="${esc(f)}">`).join("")}</datalist></div>
     </div>
     <div class="g ${isAdmin?"g4":"g3"}">
@@ -903,7 +911,7 @@ function modalEditarProduto(i){
   $("#e_save").addEventListener("click",()=>{
     const err=m=>{$("#e_err").textContent=m;};
     const d={nome:$("#e_nome").value.trim(), ean:$("#e_ean").value.trim(), sku:$("#e_sku").value.trim().toUpperCase(),
-      cat:$("#e_cat").value, cor:$("#e_cor").value.trim(), tam:$("#e_tam").value.trim(), forn:$("#e_forn").value.trim(),
+      cat:$("#e_cat").value, cor:$("#e_cor").value.trim(), tam:$("#e_tam").value.trim(), forn:$("#e_forn").value.trim(), marca:$("#e_marca").value.trim(),
       custo:isAdmin?parseNum($("#e_custo").value):p.custo, preco:+(parseNum($("#e_preco").value)||NaN).toFixed(2),
       qtd:qtdIn(), min:parseInt($("#e_min").value)};
     if(!d.nome) return err("Informe a descrição do produto.");
@@ -947,7 +955,7 @@ function modalEditarProduto(i){
 
 /* Estoque: impressão e exportação Excel (usam a lista como está filtrada na tela) */
 const filtrosEstoqueTxt=()=>{
-  const l={q:"Busca",ean:"Cód. barras",cor:"Cor",tam:"Tam.",cat:"Categoria",forn:"Fornecedor",sit:"Situação"};
+  const l={q:"Busca",ean:"Cód. barras",marca:"Marca",cor:"Cor",tam:"Tam.",cat:"Categoria",forn:"Fornecedor",sit:"Situação"};
   return Object.entries(EF).filter(([,v])=>v).map(([k,v])=>`${l[k]}: ${k==="sit"&&v==="alerta"?"Baixo + esgotado":v}`).join(" · ");
 };
 // imprime um relatório simples (sem menus) por um iframe oculto
@@ -977,9 +985,9 @@ function imprimirEstoque(itens,isAdmin,ativo){
   const pecas=itens.reduce((s,p)=>s+p.qtd,0), totCusto=itens.reduce((s,p)=>s+p.qtd*p.custo,0), totVenda=itens.reduce((s,p)=>s+p.qtd*p.preco,0);
   imprimirRelatorio("Estoque",`
     <div class="meta">Emitido em ${agoraStr()} por ${esc(SESSION.name)} · ${itens.length} produto(s) · ${n0(pecas)} peça(s)${ativo?`<br>Filtros: ${esc(filtrosEstoqueTxt())}`:""}</div>
-    <table><thead><tr><th>Produto</th><th>Cód. barras</th><th>Cor</th><th>Tam.</th><th>Categoria</th><th>Fornecedor</th>${isAdmin?'<th class="n">Custo</th>':""}<th class="n">Preço venda</th><th class="n">Estoque</th><th>Situação</th></tr></thead>
-    <tbody>${itens.map(p=>{const s=situacao(p);return `<tr><td><b>${esc(p.nome)}</b><div class="sku">${esc(p.sku)}</div></td><td>${esc(p.ean||"—")}</td><td>${esc(p.cor||"—")}</td><td>${esc(p.tam||"—")}</td><td>${esc(p.cat)}</td><td>${esc(fornDe(p)||"—")}</td>${isAdmin?`<td class="n">${brl(p.custo)}</td>`:""}<td class="n">${brl(p.preco)}</td><td class="n">${p.qtd}</td><td class="${s==="Esgotado"?"crit":s==="Baixo"?"warn":""}">${s}</td></tr>`;}).join("")}</tbody>
-    <tfoot><tr><td colspan="6">Total</td>${isAdmin?`<td class="n">${brl(totCusto)}</td>`:""}<td class="n">${brl(totVenda)}</td><td class="n">${n0(pecas)}</td><td></td></tr></tfoot></table>`);
+    <table><thead><tr><th>Produto</th><th>Cód. barras</th><th>Cor</th><th>Tam.</th><th>Categoria</th><th>Fornecedor</th><th>Marca</th>${isAdmin?'<th class="n">Custo</th>':""}<th class="n">Preço venda</th><th class="n">Estoque</th><th>Situação</th></tr></thead>
+    <tbody>${itens.map(p=>{const s=situacao(p);return `<tr><td><b>${esc(p.nome)}</b><div class="sku">${esc(p.sku)}</div></td><td>${esc(p.ean||"—")}</td><td>${esc(p.cor||"—")}</td><td>${esc(p.tam||"—")}</td><td>${esc(p.cat)}</td><td>${esc(fornDe(p)||"—")}</td><td>${esc(p.marca||"—")}</td>${isAdmin?`<td class="n">${brl(p.custo)}</td>`:""}<td class="n">${brl(p.preco)}</td><td class="n">${p.qtd}</td><td class="${s==="Esgotado"?"crit":s==="Baixo"?"warn":""}">${s}</td></tr>`;}).join("")}</tbody>
+    <tfoot><tr><td colspan="7">Total</td>${isAdmin?`<td class="n">${brl(totCusto)}</td>`:""}<td class="n">${brl(totVenda)}</td><td class="n">${n0(pecas)}</td><td></td></tr></tfoot></table>`);
 }
 /* ---------------- ETIQUETAS COM CÓDIGO DE BARRAS ---------------- */
 // código interno da loja: EAN-13 começando com "200" (faixa reservada para uso interno) + sequência + dígito verificador
@@ -991,7 +999,9 @@ function gerarEAN(){
   do{ n++; const b="200"+String(n).padStart(9,"0"); c=b+eanDV(b); }while(usados.has(c));
   return c;
 }
-const ETQ_TAM={"40x25":[40,25],"50x30":[50,30],"33x22":[33,22]};
+// [largura, altura, etiquetas por fileira] em mm; a primeira é o padrão
+const ETQ_TAM={"35x65x3":[35,65,3],"40x25":[40,25,1],"50x30":[50,30,1],"33x22":[33,22,1]};
+const etqNome=t=>{const [w,h,c]=ETQ_TAM[t]; return `${w} × ${h} mm${c>1?` — ${c} por fileira`:""}`;};
 const etqPref=()=>{ try{ return JSON.parse(localStorage.getItem("colab_etq")||"{}"); }catch(e){ return {}; } };
 const etqSalvaPref=o=>{ try{ localStorage.setItem("colab_etq",JSON.stringify(o)); }catch(e){} };
 let _barLib=null;
@@ -1002,34 +1012,90 @@ const carregaBarcode=()=>_barLib||(_barLib=new Promise((ok,erro)=>{
   s.onload=()=>ok(window.JsBarcode); s.onerror=()=>{_barLib=null;erro(new Error("jsbarcode"));};
   document.head.appendChild(s);
 }));
-// itens: [{p, n}] → n etiquetas de cada produto (uma por página, como a impressora térmica espera)
-async function imprimirEtiquetas(itens,tam,comPreco){
+// itens: [{p, n}] → n etiquetas de cada produto. Cada página = uma fileira do rolo (1 ou mais etiquetas lado a lado)
+async function imprimirEtiquetas(itens,tam,comPreco,gap=0,desl=0,vdesl=0){
   const JB=await carregaBarcode();
-  const [W,H]=ETQ_TAM[tam]||ETQ_TAM["40x25"], k=H/25;
+  const [W,H,C=1]=ETQ_TAM[tam]||ETQ_TAM["40x25"], k=H/25;
+  const vert=H>W; // etiqueta em pé (ex.: 35 × 65): layout próprio
+  const PW=C*W+(C-1)*gap;
+  // desl: anda com o conteúdo dentro de cada etiqueta (+ direita, − esquerda) sem sair da área impressa
+  // etiqueta em pé: conteúdo com no máximo 30 mm de largura, centralizado → margem de segurança se a impressão desalinhar
+  const mrg=vert?Math.max(2,(W-30)/2):2;
+  const pl=Math.max(0,mrg+desl), pr=Math.max(0,mrg-desl), BW=Math.max(20,W-pl-pr);
+  // altura da página MENOR que a etiqueta: se for maior, a térmica passa do fim e pula uma etiqueta.
+  // Com sensor de gap, ela avança sozinha até o começo da próxima. Na Elgin da loja a impressão começa ~8 mm abaixo do topo.
+  const PH=vert?H-13:H;
+  // vdesl: sobe (−) ou desce (+) o conteúdo; com o padrão (−8) o COLAB. fica colado no topo da área impressa
+  const pt=Math.max(0,8+vdesl);
   const svgDe=code=>{const s=document.createElementNS("http://www.w3.org/2000/svg","svg");
     JB(s,code,{format:eanValido(code)?"EAN13":"CODE128",width:2,height:50,margin:0,fontSize:16,textMargin:1,displayValue:true,flat:true});
     // viewBox faz o código escalar para o tamanho da etiqueta sem cortar
     s.setAttribute("viewBox",`0 0 ${parseFloat(s.getAttribute("width"))} ${parseFloat(s.getAttribute("height"))}`);
     ["style","width","height"].forEach(a=>s.removeAttribute(a)); return s.outerHTML;};
-  const um=({p})=>`<div class="etq">
+  // etiqueta em pé: barras como imagem de tamanho fixo (não estica nem quebra de página) e números em texto embaixo
+  // cada módulo (barra mais fina) = 0,25 mm = 2 pontos da térmica de 203 dpi → barras nítidas; EAN-13 fica com ~24 mm
+  const imgDe=code=>{const c=document.createElement("canvas");
+    JB(c,code,{format:eanValido(code)?"EAN13":"CODE128",width:1,height:60,margin:0,displayValue:false,flat:true});
+    const larg=Math.min(BW,c.width*0.25);
+    return `<img src="${c.toDataURL("image/png")}" alt="" style="width:${larg.toFixed(2)}mm"><div class="num">${esc(code)}</div>`;};
+  const ct=p=>`${p.cor?esc(corCurta(p)):""}${p.cor&&p.tam?" · ":""}${p.tam?"Tam. "+esc(p.tam):""}`;
+  const um=({p})=>vert?`<div class="etq">
+      <div class="top"><b>COLAB.</b></div>
+      <div class="sub">clothing</div>
+      ${p.marca?`<div class="mc">${esc(String(p.marca).toUpperCase())}</div>`:""}
+      <div class="nm">${esc(p.nome)}</div>
+      ${p.cor?`<div class="ct">${esc(corCurta(p))}</div>`:""}
+      ${p.tam?`<div class="tm">Tam. ${esc(p.tam)}</div>`:""}
+      <div class="bc">${imgDe(p.ean)}</div>
+      ${comPreco?`<div class="pr${brl(p.preco).length>9?" longo":""}">${brl(p.preco)}</div>`:""}
+      <div class="vs">“Vista a sua melhor versão.”</div></div>`
+    :`<div class="etq">
       <div class="top"><b>COLAB</b>${comPreco?`<b class="pr">${brl(p.preco)}</b>`:""}</div>
       <div class="nm">${esc(p.nome)}</div>
-      <div class="ct">${esc(p.cor||"")}${p.cor&&p.tam?" · ":""}${p.tam?"Tam. "+esc(p.tam):""}</div>
+      <div class="ct">${ct(p)}</div>
       <div class="bc">${svgDe(p.ean)}</div></div>`;
-  const etqs=itens.flatMap(it=>Array.from({length:it.n},()=>um(it))).join("");
-  const html=`<!doctype html><html><head><meta charset="utf-8"><title>Etiquetas — COLAB</title><style>
-    @page{size:${W}mm ${H}mm;margin:0}
-    html,body{margin:0;padding:0}
-    body{font-family:Arial,Helvetica,sans-serif;color:#000}
-    .etq{width:${W}mm;height:${H}mm;box-sizing:border-box;padding:${1.2*k}mm ${1.6*k}mm ${0.8*k}mm;display:flex;flex-direction:column;overflow:hidden;page-break-after:always;break-after:page}
-    .etq:last-child{page-break-after:auto;break-after:auto}
+  const todas=itens.flatMap(it=>Array.from({length:it.n},()=>um(it)));
+  const filas=[]; for(let i=0;i<todas.length;i+=C) filas.push(`<div class="fila">${todas.slice(i,i+C).join("")}</div>`);
+  const css=vert?`
+    /* tag 35 × 65: furo a ~8 mm do topo e picote a ~50 mm → conteúdo entre 11 mm e ~47 mm */
+    /* térmica: letra fina sai apagada → tudo em negrito; COLAB e preço em Arial Black */
+    .etq>*{max-width:100%;overflow:hidden}
+    .etq{padding:${pt}mm ${pr}mm 0 ${pl}mm;text-align:center;font-weight:700;-webkit-font-smoothing:none;text-rendering:geometricPrecision}
+    .top{font-family:"Arial Black",Arial,sans-serif;font-weight:900;font-size:11pt;line-height:1}.top b{font-weight:900;letter-spacing:.1em}
+    .sub{font-size:6.5pt;font-weight:700;letter-spacing:.25em;line-height:1.1;margin-top:.2mm;padding-left:.25em}
+    .mc{font-size:7.5pt;font-weight:900;letter-spacing:.08em;line-height:1.1;margin-top:.8mm;white-space:nowrap;text-overflow:ellipsis}
+    .mc+.nm{margin-top:.2mm}
+    .nm{font-size:7.5pt;font-weight:700;line-height:1.15;margin-top:1mm;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;word-break:break-word}
+    .ct{font-size:7pt;font-weight:700;line-height:1.2;margin-top:.5mm;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .tm{font-size:9.5pt;font-weight:900;line-height:1.1;margin-top:.2mm}
+    .bc{flex:none;margin-top:.8mm}
+    .bc img{display:block;margin:0 auto;height:6mm;image-rendering:pixelated}
+    .bc .num{font-family:Arial,Helvetica,sans-serif;font-weight:700;font-size:7pt;line-height:1.1;letter-spacing:.08em;margin-top:.3mm}
+    .pr{font-family:"Arial Black",Arial,sans-serif;font-weight:900;font-size:10pt;line-height:1.05;margin-top:4mm;white-space:nowrap}
+    .pr.longo{font-size:9pt}
+    .vs{font-size:6.3pt;font-weight:700;font-style:italic;line-height:1.1;margin-top:.8mm}
+    .vs small{display:block;font-size:5.3pt;font-style:normal;font-weight:700;margin-top:0}`
+   :`
+    .etq{padding:${1.2*k}mm ${1.6*k}mm ${0.8*k}mm}
     .top{display:flex;justify-content:space-between;align-items:baseline;font-size:${7.5*k}pt;line-height:1.1}
     .top b{letter-spacing:.06em}.pr{font-size:${9*k}pt;letter-spacing:0!important}
     .nm{font-size:${6.5*k}pt;font-weight:700;line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:${0.3*k}mm}
     .ct{font-size:${6*k}pt;line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
     .bc{flex:1;min-height:0;display:flex;align-items:flex-end;justify-content:center;margin-top:${0.4*k}mm}
-    .bc svg{width:100%;height:100%;max-height:${12.5*k}mm}
-  </style></head><body>${etqs}</body></html>`;
+    .bc svg{width:100%;height:100%;max-height:${12.5*k}mm}`;
+  const html=`<!doctype html><html><head><meta charset="utf-8"><title>Etiquetas — COLAB</title><style>
+    @page{size:${PW}mm ${PH}mm;margin:0}
+    html,body{margin:0;padding:0}
+    body{font-family:Arial,Helvetica,sans-serif;color:#000}
+    /* fileira 2 mm menor que a etiqueta: se passar da altura, o navegador cria página extra e a impressora pula etiqueta */
+    /* em pé: a fileira tem só a altura do conteúdo, para caber mesmo se o Chrome/driver colocar margem no topo */
+    .fila{width:${PW}mm;height:${vert?"auto":(PH-2)+"mm"};display:flex;align-items:flex-start;overflow:hidden;page-break-after:always;break-after:page;page-break-inside:avoid;break-inside:avoid}
+    /* distância entre colunas por margem (aceita negativo: aproxima as colunas quando o passo do rolo é menor que a etiqueta) */
+    .fila>.etq+.etq{margin-left:${gap}mm}
+    .fila:last-child{page-break-after:auto;break-after:auto}
+    .etq{width:${W}mm;height:${vert?"auto":(PH-2)+"mm"};flex:none;box-sizing:border-box;display:flex;flex-direction:column;overflow:hidden}
+    ${css}
+  </style></head><body>${filas.join("")}</body></html>`;
   const fr=document.createElement("iframe");
   fr.style.cssText="position:fixed;right:0;bottom:0;width:0;height:0;border:0";
   document.body.appendChild(fr);
@@ -1037,12 +1103,20 @@ async function imprimirEtiquetas(itens,tam,comPreco){
   setTimeout(()=>{fr.contentWindow.focus(); fr.contentWindow.print(); setTimeout(()=>fr.remove(),1000);},200);
 }
 function modalEtiquetas(itens,titulo="Imprimir etiquetas",sub=""){
-  const pref=etqPref(); let tam=ETQ_TAM[pref.tam]?pref.tam:"40x25";
+  // v4: tag 35 × 65 da loja, 3 por fileira. No rolo o passo real entre colunas é ~33,5 mm → espaço −1,5 mm.
+  // Na Elgin da loja a impressão começa ~8 mm abaixo do topo → ajuste vertical padrão −8. Preferências antigas não valem mais.
+  const pref=etqPref(), ok=pref.v===4; let tam=ok&&ETQ_TAM[pref.tam]?pref.tam:Object.keys(ETQ_TAM)[0];
+  let gap=ok&&pref.gap!=null?pref.gap:-1.5;
+  let desl=ok&&pref.desl!=null?pref.desl:0;
+  let vdesl=ok&&pref.vdesl!=null?pref.vdesl:-8;
   const lst=itens.map(({p,n})=>({p,n:Math.max(0,n|0)}));
   modal(`<h3>${esc(titulo)}</h3>
     ${sub?`<p style="margin:0;font-size:13px;color:var(--muted)">${sub}</p>`:""}
     <div class="formrow" style="align-items:end">
-      <div class="field"><label>Tamanho da etiqueta</label><select class="inp" id="et_tam">${Object.keys(ETQ_TAM).map(t=>`<option value="${t}" ${t===tam?"selected":""}>${t.replace("x"," × ")} mm</option>`).join("")}</select></div>
+      <div class="field"><label>Tamanho da etiqueta</label><select class="inp" id="et_tam">${Object.keys(ETQ_TAM).map(t=>`<option value="${t}" ${t===tam?"selected":""}>${etqNome(t)}</option>`).join("")}</select></div>
+      <div class="field" id="et_gapf" style="max-width:150px" ${ETQ_TAM[tam][2]>1?"":"hidden"}><label>Espaço entre etiquetas (mm)</label><input class="inp" id="et_gap" type="number" min="-3" max="10" step="0.5" value="${gap}" title="Negativo aproxima as colunas (use se a 2ª e a 3ª saírem para a direita)"></div>
+      <div class="field" id="et_deslf" style="max-width:150px" ${ETQ_TAM[tam][2]>1?"":"hidden"} title="Se a impressão sair deslocada: positivo empurra para a direita, negativo para a esquerda"><label>Ajuste lateral (mm)</label><input class="inp" id="et_desl" type="number" min="-4" max="4" step="0.5" value="${desl}"></div>
+      <div class="field" id="et_vdeslf" style="max-width:150px" ${ETQ_TAM[tam][2]>1?"":"hidden"} title="Se a impressão sair alta ou baixa: negativo sobe, positivo desce"><label>Ajuste vertical (mm)</label><input class="inp" id="et_vdesl" type="number" min="-11" max="8" step="0.5" value="${vdesl}"></div>
       <label class="chk" style="margin-bottom:10px"><input type="checkbox" id="et_preco" ${pref.semPreco?"":"checked"}> Mostrar preço</label>
     </div>
     <div class="tw" style="border:1px solid var(--border);border-radius:10px;max-height:44vh;overflow:auto"><table style="min-width:0">
@@ -1056,16 +1130,19 @@ function modalEtiquetas(itens,titulo="Imprimir etiquetas",sub=""){
   const total=()=>lst.reduce((s,x)=>s+x.n,0);
   const rot=()=>{$("#et_ok").textContent=`Imprimir ${total()} etiqueta(s)`;};
   $("#modalHost").querySelectorAll("[data-et]").forEach(x=>x.addEventListener("input",()=>{lst[+x.dataset.et].n=Math.max(0,parseInt(x.value)||0);rot();}));
-  $("#et_tam").addEventListener("change",e=>{tam=e.target.value;});
+  $("#et_tam").addEventListener("change",e=>{tam=e.target.value; $("#et_gapf").hidden=$("#et_deslf").hidden=$("#et_vdeslf").hidden=!(ETQ_TAM[tam][2]>1);});
+  $("#et_vdesl").addEventListener("input",e=>{vdesl=Math.max(-11,Math.min(8,parseFloat(String(e.target.value).replace(",","."))||0));});
+  $("#et_gap").addEventListener("input",e=>{gap=Math.max(-3,Math.min(10,parseFloat(String(e.target.value).replace(",","."))||0));});
+  $("#et_desl").addEventListener("input",e=>{desl=Math.max(-4,Math.min(4,parseFloat(String(e.target.value).replace(",","."))||0));});
   rot();
   $("#et_ok").addEventListener("click",async()=>{
     const sel=lst.filter(x=>x.n>0);
     if(!sel.length) return $("#et_err").textContent="Informe a quantidade de etiquetas.";
     if(total()>500) return $("#et_err").textContent="No máximo 500 etiquetas por vez.";
     let gerados=0; sel.forEach(x=>{ if(!x.p.ean){ x.p.ean=gerarEAN(); gerados++; } });
-    const comPreco=$("#et_preco").checked; etqSalvaPref({tam,semPreco:!comPreco});
+    const comPreco=$("#et_preco").checked; etqSalvaPref({v:4,tam,gap,desl,vdesl,semPreco:!comPreco});
     $("#et_ok").disabled=true; $("#et_ok").textContent="Preparando…";
-    try{ await imprimirEtiquetas(sel,tam,comPreco); closeModal(); if(current==="estoque") viewEstoque();
+    try{ await imprimirEtiquetas(sel,tam,comPreco,gap,desl,vdesl); closeModal(); if(current==="estoque") viewEstoque();
       if(gerados) toast(`${gerados} produto(s) ganharam código de barras.`); }
     catch(e){ $("#et_ok").disabled=false; rot(); $("#et_err").textContent="Não foi possível gerar as etiquetas. Verifique a internet."; }
   });
@@ -1082,15 +1159,15 @@ async function excelEstoque(itens,isAdmin){
   if(!itens.length) return toast("Nada para exportar com esses filtros.");
   toast("Gerando planilha…");
   let X; try{ X=await carregaXlsx(); }catch(e){ return toast("Não foi possível gerar o Excel. Verifique a internet."); }
-  const cab=["Produto","Código","Cód. barras","Cor","Tamanho","Categoria","Fornecedor",...(isAdmin?["Custo (R$)"]:[]),"Preço venda (R$)","Estoque","Estoque mín.","Situação",...(isAdmin?["Total custo (R$)"]:[]),"Total venda (R$)"];
-  const linhas=itens.map(p=>[p.nome,p.sku,p.ean||"",p.cor||"",p.tam||"",p.cat||"",fornDe(p)||"",...(isAdmin?[p.custo]:[]),p.preco,p.qtd,p.min??"",situacao(p),...(isAdmin?[p.qtd*p.custo]:[]),p.qtd*p.preco]);
-  const tot=["TOTAL","","","","","","",...(isAdmin?[""]:[]),"",itens.reduce((s,p)=>s+p.qtd,0),"","",...(isAdmin?[itens.reduce((s,p)=>s+p.qtd*p.custo,0)]:[]),itens.reduce((s,p)=>s+p.qtd*p.preco,0)];
+  const cab=["Produto","Código","Cód. barras","Cor","Tamanho","Categoria","Fornecedor","Marca",...(isAdmin?["Custo (R$)"]:[]),"Preço venda (R$)","Estoque","Estoque mín.","Situação",...(isAdmin?["Total custo (R$)"]:[]),"Total venda (R$)"];
+  const linhas=itens.map(p=>[p.nome,p.sku,p.ean||"",p.cor||"",p.tam||"",p.cat||"",fornDe(p)||"",p.marca||"",...(isAdmin?[p.custo]:[]),p.preco,p.qtd,p.min??"",situacao(p),...(isAdmin?[p.qtd*p.custo]:[]),p.qtd*p.preco]);
+  const tot=["TOTAL","","","","","","","",...(isAdmin?[""]:[]),"",itens.reduce((s,p)=>s+p.qtd,0),"","",...(isAdmin?[itens.reduce((s,p)=>s+p.qtd*p.custo,0)]:[]),itens.reduce((s,p)=>s+p.qtd*p.preco,0)];
   const ws=X.utils.aoa_to_sheet([cab,...linhas,[],tot]);
   // códigos de barras como texto (sem notação científica) e valores em R$
   const moeda=new Set(cab.map((c,i)=>c.includes("R$")?i:-1).filter(i=>i>=0));
   for(let r=1;r<=linhas.length+2;r++) cab.forEach((c,ci)=>{
     const cel=ws[X.utils.encode_cell({r,c:ci})]; if(!cel) return;
-    if(ci===2&&cel.v!==""){cel.t="s";cel.v=String(cel.v);}
+    if(ci===2&&cel.v!==""){cel.t="s";cel.v=String(cel.v);} // cód. barras
     if(moeda.has(ci)&&cel.t==="n") cel.z='"R$" #,##0.00';
   });
   ws["!cols"]=cab.map((c,i)=>({wch:i===0?32:Math.max(c.length+2,12)}));
@@ -2073,7 +2150,9 @@ function modalProduto(pre={}){
     <div class="field"><label>Tamanho <span class="req">*</span></label>
       <div class="sizes" id="p_sizes">${TAMANHOS.map(t=>`<button type="button" data-t="${t}">${t}</button>`).join("")}
         <input class="inp" id="p_tam" placeholder="Outro" style="width:90px;padding:4px 8px"></div></div>
-    <div class="g g2" style="grid-template-columns:2fr 1fr">
+    <div class="g g3" style="grid-template-columns:1.2fr 1.5fr 1fr">
+      <div class="field"><label>Marca</label><input class="inp" id="p_marca" list="p_marcas" placeholder="Ex.: Puma">
+        <datalist id="p_marcas">${marcasCad().map(m=>`<option value="${esc(m)}">`).join("")}</datalist></div>
       <div class="field"><label>Fornecedor</label><input class="inp" id="p_forn" list="p_forns" placeholder="Ex.: Ogochi">
         <datalist id="p_forns">${forns.map(f=>`<option value="${esc(f)}">`).join("")}</datalist></div>
       <div class="field"><label>Data da entrada</label><input class="inp" id="p_data" type="date" value="${hojeISO()}"></div>
@@ -2123,8 +2202,12 @@ function modalProduto(pre={}){
   $("#p_catok").addEventListener("click",criarCat);
   $("#p_catname").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();criarCat();}});
 
+  // nova numeração/cor de um modelo já cadastrado: puxa a marca dele
+  $("#p_nome").addEventListener("change",()=>{ if(existente||$("#p_marca").value.trim()) return;
+    const k=$("#p_nome").value.trim().toLowerCase(), m=ESTOQUE.find(x=>x.marca&&chaveModelo(x)===k); if(m) $("#p_marca").value=m.marca; });
+
   // campos de identificação: travados quando é reposição
-  const identIds=["p_nome","p_sku","p_cat","p_newcat","p_cor","p_tam"];
+  const identIds=["p_nome","p_sku","p_cat","p_newcat","p_cor","p_tam","p_marca"];
   const travar=on=>{identIds.forEach(id=>{$("#"+id).disabled=on;}); sizes.querySelectorAll("button").forEach(b=>b.disabled=on);
     sizes.style.opacity=on?.6:1; if(on)$("#p_catbox").hidden=true;};
 
@@ -2134,6 +2217,7 @@ function modalProduto(pre={}){
     $("#p_qlbl").innerHTML='Qtd. que chegou <span class="req">*</span>';
     $("#p_save").textContent="Dar entrada no estoque";
     $("#p_nome").value=p.nome; sku.value=p.sku; $("#p_cat").value=p.cat; $("#p_cor").value=p.cor||""; tam.value=p.tam||""; marcaTam();
+    $("#p_marca").value=p.marca||"";
     $("#p_min").value=p.min;
     const hist=ENTRADAS.filter(e=>e.sku===p.sku).sort((a,b)=>b.data.localeCompare(a.data)), ult=hist[0];
     $("#p_forn").value=ult?ult.forn:"";
@@ -2155,7 +2239,7 @@ function modalProduto(pre={}){
     existente=null; travar(false);
     $("#p_title").textContent="Cadastrar produto";
     $("#p_qlbl").textContent="Qtd. inicial"; $("#p_save").textContent="Salvar produto"; $("#p_aviso").innerHTML="";
-    ["p_nome","p_cor","p_tam","p_custo","p_mk","p_preco"].forEach(id=>$("#"+id).value="");
+    ["p_nome","p_cor","p_tam","p_marca","p_custo","p_mk","p_preco"].forEach(id=>$("#"+id).value="");
     pCusto.placeholder="0,00"; $("#p_qtd").value=0; $("#p_min").value=5; skuManual=false; autoSku(); marcaTam(); pCalc();
   };
   const checaCodigo=()=>{const p=acharProduto($("#p_ean").value); if(p){ if(p!==existente) modoEntrada(p); } else modoNovo();};
@@ -2194,7 +2278,7 @@ function modalProduto(pre={}){
 
     // ---- produto novo
     const d={ean:$("#p_ean").value.trim(), nome:$("#p_nome").value.trim(), sku:sku.value.trim().toUpperCase(),
-      cat:$("#p_cat").value, cor:$("#p_cor").value.trim(), tam:tam.value.trim(),
+      cat:$("#p_cat").value, cor:$("#p_cor").value.trim(), tam:tam.value.trim(), marca:$("#p_marca").value.trim(),
       custo:custoIn||0, preco, qtd:Math.max(0,qtd||0), min, forn:forn!=="—"?forn:""};
     if(d.ean&&!/^\d{6,14}$/.test(d.ean)) return err("Código de barras deve ter só números (6 a 14 dígitos).");
     if(!d.nome) return err("Informe a descrição do produto.");
