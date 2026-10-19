@@ -1479,6 +1479,10 @@ function askAdminPw(onOk,msg){
 
 function agoraStr(){return new Date().toLocaleString("pt-BR",{dateStyle:"short",timeStyle:"short"});}
 let PDV={cart:[],ultima:null};
+// produto genérico (código 123456): usado quando a peça não está cadastrada, para não travar a venda.
+// Só nele o preço é editado na venda e o estoque não bloqueia (ajusta depois).
+const COD_GENERICO="123456";
+const ehGenerico=p=>!!p&&(String(p.ean||"")===COD_GENERICO||String(p.sku||"")===COD_GENERICO);
 function viewPDV(){
   const isAdmin=SESSION.role==="admin";
   const vendedores=USERS.filter(u=>u.ativo);
@@ -1542,18 +1546,25 @@ function viewPDV(){
   const infoProd=(p,extra="")=>`<div class="pdv-prod">
       ${caminho(p)?`<div class="pdv-cam">${caminho(p)}</div>`:""}
       <div class="pdv-nm">${esc(p.nome)}</div>
-      <div class="pdv-var">${p.cor?`<span class="badge">${esc(corCurta(p))}</span>`:""}${p.tam?`<span class="badge tam">Tam. ${esc(p.tam)}</span>`:""}${extra}</div></div>`;
+      <div class="pdv-var">${p.cor&&p.cor!=="—"?`<span class="badge">${esc(corCurta(p))}</span>`:""}${p.tam?`<span class="badge tam">Tam. ${esc(p.tam)}</span>`:""}${extra}</div></div>`;
   const draw=()=>{
     $("#v_cart").innerHTML=cart.length?`<div class="tw" style="border:1px solid var(--border);border-radius:10px"><table style="min-width:0">
       <thead><tr><th>Produto</th><th class="num">Qtd.</th><th class="num">Unit.</th><th class="num">Subtotal</th><th></th></tr></thead>
-      <tbody>${cart.map((i,k)=>`<tr><td>${infoProd(i.p,`<span class="hint">${i.p.qtd} em estoque</span>`)}</td>
+      <tbody>${cart.map((i,k)=>{const g=ehGenerico(i.p), rever=g&&i.preco<=1;
+        return `<tr${rever?' style="background:var(--warn-soft)"':""}><td>${infoProd(i.p,g?`<span class="chip warn" style="font-size:10.5px">item genérico · informe o preço</span>`:`<span class="hint">${i.p.qtd} em estoque</span>`)}</td>
         <td class="num"><input class="inp cnt" type="number" min="1" data-q="${k}" value="${i.qtd}" style="width:64px"></td>
-        <td class="num tnum">${brl(i.preco)}</td><td class="num tnum">${brl(i.qtd*i.preco)}</td>
-        <td><button class="icon-btn" style="width:28px;height:28px" data-rm="${k}" title="Remover">×</button></td></tr>`).join("")}</tbody></table></div>`
+        <td class="num tnum">${g?`<input class="inp" data-pr="${k}" inputmode="decimal" value="${i.preco.toFixed(2).replace(".",",")}" title="Preço deste item genérico" style="width:86px;text-align:right;${rever?"border-color:var(--warn);":""}">`:brl(i.preco)}</td><td class="num tnum">${brl(i.qtd*i.preco)}</td>
+        <td><button class="icon-btn" style="width:28px;height:28px" data-rm="${k}" title="Remover">×</button></td></tr>`;}).join("")}</tbody></table></div>`
       :`<div class="infobox" style="text-align:center;color:var(--muted);padding:28px">Nenhum produto ainda. Bipe o primeiro item.</div>`;
     $("#v_cart").querySelectorAll("[data-q]").forEach(x=>x.addEventListener("change",()=>{
       const i=cart[+x.dataset.q], q=Math.max(1,parseInt(x.value)||1);
-      if(q>i.p.qtd){msg(`Só há ${i.p.qtd} un. de ${i.p.nome} em estoque.`);i.qtd=i.p.qtd;} else i.qtd=q; draw();}));
+      if(q>i.p.qtd&&!ehGenerico(i.p)){msg(`Só há ${i.p.qtd} un. de ${i.p.nome} em estoque.`);i.qtd=i.p.qtd;} else i.qtd=q; draw();}));
+    // preço editável só no item genérico
+    $("#v_cart").querySelectorAll("[data-pr]").forEach(x=>{
+      x.addEventListener("focus",()=>x.select());
+      x.addEventListener("change",()=>{const v=parseNum(x.value); cart[+x.dataset.pr].preco=v>0?+v.toFixed(2):1; draw();});
+      x.addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();x.blur();}});
+    });
     $("#v_cart").querySelectorAll("[data-rm]").forEach(x=>x.addEventListener("click",()=>{cart.splice(+x.dataset.rm,1);draw();}));
     $("#v_sub").textContent=brl(sub());
     syncDesc();
@@ -1565,8 +1576,10 @@ function viewPDV(){
   const poe=p=>{
     $("#v_code").value=""; fechaSug();
     const it=cart.find(i=>i.p===p), ja=it?it.qtd:0;
-    if(ja+1>p.qtd) return msg(`Sem estoque de ${p.nome} (${p.cor} · ${p.tam}): ${p.qtd} un. disponíveis.`);
+    if(ja+1>p.qtd&&!ehGenerico(p)) return msg(`Sem estoque de ${p.nome} (${p.cor} · ${p.tam}): ${p.qtd} un. disponíveis.`);
     if(it) it.qtd++; else cart.push({p,qtd:1,preco:p.preco});
+    if(ehGenerico(p)&&!it){ msg("Item genérico: digite o preço certo na coluna Unit.",false); draw();
+      setTimeout(()=>{const x=$(`#v_cart [data-pr="${cart.length-1}"]`); x?.focus(); x?.select();},30); return; }
     msg(`✓ ${[p.cat,p.marca].filter(Boolean).join(" › ")}${p.cat||p.marca?" · ":""}${p.nome} · ${corCurta(p)} · Tam. ${p.tam}`,true); draw();
   };
   // busca por descrição: todas as palavras digitadas precisam aparecer (nome, código, cor, tamanho, categoria)
@@ -1574,7 +1587,7 @@ function viewPDV(){
   const fechaSug=()=>{sug=[];$("#v_sug").hidden=true;};
   const desenhaSug=()=>{
     const box=$("#v_sug");
-    box.innerHTML=sug.length?sug.map((p,k)=>`<button type="button" data-s="${k}" class="${k===sel?"on":""}" ${p.qtd>0?"":"disabled"}>
+    box.innerHTML=sug.length?sug.map((p,k)=>`<button type="button" data-s="${k}" class="${k===sel?"on":""}" ${p.qtd>0||ehGenerico(p)?"":"disabled"}>
         <span>${infoProd(p,`<span class="hint">${esc(p.sku)}</span>`)}</span>
         <span style="text-align:right;white-space:nowrap"><b class="tnum">${brl(p.preco)}</b><div class="hint">${p.qtd>0?`${p.qtd} em estoque`:"esgotado"}</div></span></button>`).join("")
       :`<div class="vazio">Nenhum produto com “${esc($("#v_code").value.trim())}”.</div>`;
@@ -1592,7 +1605,7 @@ function viewPDV(){
   const add=()=>{
     const c=$("#v_code").value.trim(); if(!c)return;
     const p=acharProduto(c); if(p) return poe(p);           // código de barras / código exato
-    if(sug[sel]&&sug[sel].qtd>0) return poe(sug[sel]);      // item escolhido na lista
+    if(sug[sel]&&(sug[sel].qtd>0||ehGenerico(sug[sel]))) return poe(sug[sel]); // item escolhido na lista
     if(!/^\d+$/.test(c)&&!$("#v_sug").hidden) return;       // lista aberta sem item disponível
     $("#v_code").value=""; fechaSug(); msg(`Código ${c} não cadastrado.`);
   };
@@ -1618,7 +1631,18 @@ function viewPDV(){
 
   $("#v_save").addEventListener("click",()=>{
     if(!cart.length) return msg("Bipe pelo menos um produto.");
-    const falta=cart.find(i=>i.qtd>i.p.qtd); if(falta) return msg(`Estoque insuficiente de ${falta.p.nome}.`);
+    const falta=cart.find(i=>i.qtd>i.p.qtd&&!ehGenerico(i.p)); if(falta) return msg(`Estoque insuficiente de ${falta.p.nome}.`);
+    // item genérico com R$ 1,00: não existe nada na loja nesse valor → provavelmente esqueceu de pôr o preço
+    const kRev=cart.findIndex(i=>ehGenerico(i.p)&&i.preco<=1);
+    if(kRev>=0){
+      modal(`<h3 style="color:var(--warn)">⚠ Rever item</h3>
+        <p style="margin:0;font-size:14px">O item genérico <b>${esc(cart[kRev].p.nome)}</b> está com <b>${brl(cart[kRev].preco)}</b>.</p>
+        <p style="margin:0;font-size:13px;color:var(--muted)">Nenhum produto da loja custa esse valor. Digite o preço certo do item antes de finalizar a venda.</p>
+        <div class="row"><button class="btn" id="rev_ok">Corrigir o preço</button></div>`);
+      $("#rev_ok").addEventListener("click",()=>{closeModal(); const x=$(`#v_cart [data-pr="${kRev}"]`); x?.focus(); x?.select();});
+      setTimeout(()=>$("#rev_ok")?.focus(),30);
+      return;
+    }
     const dataISO=$("#v_data").value; if(!dataISO) return msg("Informe a data da venda.");
     const valor=+total().toFixed(2), tipo=$("#v_tipo").value, fr=frete();
     cart.forEach(i=>i.p.qtd-=i.qtd);
