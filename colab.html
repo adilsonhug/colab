@@ -782,6 +782,7 @@ function viewEstoque(){
       <button class="btn ghost" id="estEtq" title="Etiquetas dos produtos marcados (ou, sem marcação, dos filtrados)">
         <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="vertical-align:-2px;margin-right:4px"><path d="M4 6v12M8 6v12M11 6v12M15 6v12M18 6v12M21 6v12"/></svg><span id="estEtqTxt">Etiquetas</span></button>
       <button class="btn ghost sm" id="estSelClear" hidden>Desmarcar todos</button>
+      ${isAdmin?`<button class="btn ghost sm" id="estDel" hidden style="color:var(--crit)" title="Apaga o cadastro dos produtos marcados (pede a senha do administrador)">🗑 Excluir marcados</button>`:""}
       <button class="btn ghost" id="estPrint" title="Imprime a lista como está filtrada">
         <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px;margin-right:4px"><path d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>Imprimir</button>
       <button class="btn ghost" id="estXlsx" title="Baixa a lista como está filtrada em planilha Excel">
@@ -848,12 +849,37 @@ function viewEstoque(){
     const n=ESTQ_SEL.size, vis=lista.filter(x=>ESTQ_SEL.has(x.p.sku)).length, all=$("#estSelAll");
     $("#estEtqTxt").textContent=n?`Etiquetas (${n} marcado${n>1?"s":""})`:"Etiquetas";
     $("#estSelClear").hidden=!n;
+    if($("#estDel")){ $("#estDel").hidden=!n; $("#estDel").textContent=`🗑 Excluir marcados (${n})`; }
     all.checked=!!lista.length&&vis===lista.length; all.indeterminate=vis>0&&vis<lista.length;
   };
   $("#view").querySelectorAll("[data-sel]").forEach(c=>c.addEventListener("change",()=>{ c.checked?ESTQ_SEL.add(c.dataset.sel):ESTQ_SEL.delete(c.dataset.sel); selUI(); }));
   $("#estSelAll").addEventListener("change",e=>{
     lista.forEach(x=>e.target.checked?ESTQ_SEL.add(x.p.sku):ESTQ_SEL.delete(x.p.sku));
     $("#view").querySelectorAll("[data-sel]").forEach(c=>c.checked=e.target.checked); selUI();
+  });
+  // excluir cadastro: só administrador, confirma a lista e ainda pede a senha do administrador
+  $("#estDel")?.addEventListener("click",()=>{
+    if(SESSION.role!=="admin") return;
+    const alvo=ESTOQUE.filter(p=>ESTQ_SEL.has(p.sku)); if(!alvo.length) return;
+    modal(`<h3 style="color:var(--crit)">🗑 Excluir ${alvo.length} produto(s) do estoque</h3>
+      <p style="margin:0;font-size:13px;color:var(--muted)">O cadastro destes produtos será apagado. As vendas e entradas antigas continuam no histórico, e a exclusão fica registrada em “Ajustes de estoque”.</p>
+      <div class="tw" style="border:1px solid var(--border);border-radius:10px;max-height:40vh;overflow:auto"><table style="min-width:0">
+        <thead><tr><th>Produto</th><th>Cor · Tam.</th><th class="num">Estoque</th></tr></thead>
+        <tbody>${alvo.map(p=>`<tr><td><b>${esc(p.nome)}</b><div class="hint">${esc(p.sku)}${p.ean?" · "+esc(p.ean):""}</div></td><td>${esc(corCurta(p))} · ${esc(p.tam||"—")}</td><td class="num tnum ${p.qtd?"stock-low":""}">${p.qtd}</td></tr>`).join("")}</tbody></table></div>
+      ${alvo.some(p=>p.qtd>0)?`<div class="infobox warn" style="padding:8px 12px">⚠ Há produto com peças em estoque. Elas também deixam de existir no sistema.</div>`:""}
+      <div class="row"><button class="btn ghost" data-close>Cancelar</button><button class="btn" id="del_ok" style="background:var(--crit);border-color:var(--crit)">Excluir ${alvo.length} produto(s)</button></div>`,"wide");
+    $("#del_ok").addEventListener("click",()=>askAdminPw(()=>{
+      const quando=agoraStr();
+      alvo.forEach(p=>{
+        AJUSTES.unshift({data:quando,sku:p.sku,nome:p.nome,motivo:"Cadastro excluído",obs:`${corCurta(p)} · ${p.tam||"—"}${p.ean?" · "+p.ean:""}`,
+          antes:p.qtd,depois:0,user:SESSION.name,autor:SESSION.name});
+        const k=ESTOQUE.indexOf(p); if(k>=0) ESTOQUE.splice(k,1);
+        ESTQ_SEL.delete(p.sku);
+      });
+      PDV.cart=PDV.cart.filter(i=>ESTOQUE.includes(i.p)); // tira da venda em andamento, se estiver lá
+      ESTQ_HL=null; viewEstoque();
+      toast(`${alvo.length} produto(s) excluído(s) do estoque.`);
+    },`Confirme a exclusão de ${alvo.length} produto(s) com a senha do administrador.`));
   });
   $("#estSelClear").addEventListener("click",()=>{ ESTQ_SEL.clear(); $("#view").querySelectorAll("[data-sel]").forEach(c=>c.checked=false); selUI(); });
   selUI();
