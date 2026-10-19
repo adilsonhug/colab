@@ -185,6 +185,16 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
 .sugest button.on,.sugest button:hover{background:var(--accent-soft)}
 .sugest button:disabled{opacity:.5;cursor:not-allowed}
 .sugest .vazio{padding:10px 12px;color:var(--muted);font-size:13px}
+/* Nova venda: produto em 3 linhas — CATEGORIA › MARCA / descrição / cor + tamanho */
+.pdv-prod{display:flex;flex-direction:column;gap:2px;min-width:0}
+.pdv-cam{font-size:10.5px;font-weight:700;letter-spacing:.06em;color:var(--muted)}
+.pdv-nm{font-weight:700;font-size:13.5px;line-height:1.25}
+.pdv-var{display:flex;gap:5px;flex-wrap:wrap;align-items:center;margin-top:2px}
+/* desconto discreto na Nova venda */
+.desc-link{border:0;background:none;color:var(--muted);font:inherit;font-size:11px;text-decoration:underline;cursor:pointer;padding:0 0 10px;opacity:.7}
+.desc-link:hover{opacity:1}
+.desc-box{display:flex;gap:4px;padding-bottom:4px}
+.desc-box .inp{width:58px;padding:5px 6px;font-size:12px}
 .scan-ico{width:42px;height:42px;border-radius:10px;background:var(--accent-soft);color:var(--accent);display:grid;place-items:center;flex:none}
 .scan-ico svg{width:22px;height:22px}
 tbody tr.hl{background:var(--accent-soft)}
@@ -1497,14 +1507,18 @@ function viewPDV(){
           <div class="field"><label>Pagamento</label><select class="inp" id="v_pay">${PAGAMENTOS.map(p=>`<option>${p}</option>`).join("")}</select></div>
           <div class="field"><label>Tipo</label><select class="inp" id="v_tipo"><option>Loja física</option><option>Online</option></select></div>
         </div>
-        <div class="formrow" style="grid-template-columns:repeat(3,1fr)">
-          <div class="field"><label>Desconto (%)</label><input class="inp" id="v_pct" inputmode="decimal" placeholder="0"></div>
-          <div class="field"><label>Desconto (R$)</label><input class="inp" id="v_desc" inputmode="decimal" placeholder="0,00"></div>
-          <div class="field"><label>Frete (R$)</label><input class="inp" id="v_frete" inputmode="decimal" placeholder="0,00"></div>
+        <div style="display:flex;gap:10px;align-items:flex-end">
+          <div class="field" style="flex:1"><label>Frete (R$)</label><input class="inp" id="v_frete" inputmode="decimal" placeholder="0,00"></div>
+          <!-- desconto discreto: só um link pequeno; os campos abrem ao clicar -->
+          <button type="button" id="v_descbtn" class="desc-link">desconto</button>
+          <div id="v_descbox" class="desc-box" hidden>
+            <input class="inp" id="v_pct" inputmode="decimal" placeholder="%" title="Desconto em %">
+            <input class="inp" id="v_desc" inputmode="decimal" placeholder="R$" title="Desconto em R$">
+          </div>
         </div>
         <div class="infobox" style="gap:4px">
           <div style="display:flex;justify-content:space-between"><span style="color:var(--muted)">Subtotal</span><b class="tnum" id="v_sub">R$ 0,00</b></div>
-          <div style="display:flex;justify-content:space-between"><span style="color:var(--muted)">Desconto / frete</span><b class="tnum" id="v_adj">—</b></div>
+          <div style="display:flex;justify-content:space-between"><span style="color:var(--muted)">Ajustes</span><b class="tnum" id="v_adj">—</b></div>
         </div>
         <div class="total-bar"><span>Total da venda</span><b class="tnum" id="v_total">R$ 0,00</b></div>
         <div style="display:flex;gap:9px"><button class="btn ghost" id="v_clear" style="flex:1">Limpar</button><button class="btn" id="v_save" style="flex:2">Finalizar venda</button></div>
@@ -1523,10 +1537,16 @@ function viewPDV(){
     if(descModo==="pct"){ $("#v_desc").value=pct()?desc().toFixed(2).replace(".",","):""; }
     else { const d=desc(); $("#v_pct").value=d&&s0?(d/s0*100).toLocaleString("pt-BR",{maximumFractionDigits:1}):""; } };
   const total=()=>Math.max(0,sub()-desc()+frete());
+  // produto na venda: CATEGORIA › MARCA / descrição / cor + tamanho
+  const caminho=p=>[p.cat,p.marca].filter(Boolean).map(x=>esc(String(x).toUpperCase())).join(` <span style="opacity:.6">›</span> `);
+  const infoProd=(p,extra="")=>`<div class="pdv-prod">
+      ${caminho(p)?`<div class="pdv-cam">${caminho(p)}</div>`:""}
+      <div class="pdv-nm">${esc(p.nome)}</div>
+      <div class="pdv-var">${p.cor?`<span class="badge">${esc(corCurta(p))}</span>`:""}${p.tam?`<span class="badge tam">Tam. ${esc(p.tam)}</span>`:""}${extra}</div></div>`;
   const draw=()=>{
     $("#v_cart").innerHTML=cart.length?`<div class="tw" style="border:1px solid var(--border);border-radius:10px"><table style="min-width:0">
       <thead><tr><th>Produto</th><th class="num">Qtd.</th><th class="num">Unit.</th><th class="num">Subtotal</th><th></th></tr></thead>
-      <tbody>${cart.map((i,k)=>`<tr><td><b>${esc(i.p.nome)}</b><div class="hint">${esc(i.p.cor)} · ${esc(i.p.tam)} · ${esc(i.p.cat)} · ${i.p.qtd} em estoque</div></td>
+      <tbody>${cart.map((i,k)=>`<tr><td>${infoProd(i.p,`<span class="hint">${i.p.qtd} em estoque</span>`)}</td>
         <td class="num"><input class="inp cnt" type="number" min="1" data-q="${k}" value="${i.qtd}" style="width:64px"></td>
         <td class="num tnum">${brl(i.preco)}</td><td class="num tnum">${brl(i.qtd*i.preco)}</td>
         <td><button class="icon-btn" style="width:28px;height:28px" data-rm="${k}" title="Remover">×</button></td></tr>`).join("")}</tbody></table></div>`
@@ -1547,7 +1567,7 @@ function viewPDV(){
     const it=cart.find(i=>i.p===p), ja=it?it.qtd:0;
     if(ja+1>p.qtd) return msg(`Sem estoque de ${p.nome} (${p.cor} · ${p.tam}): ${p.qtd} un. disponíveis.`);
     if(it) it.qtd++; else cart.push({p,qtd:1,preco:p.preco});
-    msg(`✓ ${p.nome} · ${p.cor} · ${p.tam}`,true); draw();
+    msg(`✓ ${[p.cat,p.marca].filter(Boolean).join(" › ")}${p.cat||p.marca?" · ":""}${p.nome} · ${corCurta(p)} · Tam. ${p.tam}`,true); draw();
   };
   // busca por descrição: todas as palavras digitadas precisam aparecer (nome, código, cor, tamanho, categoria)
   let sug=[], sel=0;
@@ -1555,7 +1575,7 @@ function viewPDV(){
   const desenhaSug=()=>{
     const box=$("#v_sug");
     box.innerHTML=sug.length?sug.map((p,k)=>`<button type="button" data-s="${k}" class="${k===sel?"on":""}" ${p.qtd>0?"":"disabled"}>
-        <span><b>${esc(p.nome)}</b><div class="hint">${esc(p.cor||"—")} · ${esc(p.tam||"—")} · ${esc(p.sku)}</div></span>
+        <span>${infoProd(p,`<span class="hint">${esc(p.sku)}</span>`)}</span>
         <span style="text-align:right;white-space:nowrap"><b class="tnum">${brl(p.preco)}</b><div class="hint">${p.qtd>0?`${p.qtd} em estoque`:"esgotado"}</div></span></button>`).join("")
       :`<div class="vazio">Nenhum produto com “${esc($("#v_code").value.trim())}”.</div>`;
     box.hidden=false;
@@ -1565,7 +1585,7 @@ function viewPDV(){
     const t=$("#v_code").value.trim();
     if(t.length<2||/^\d+$/.test(t)) return fechaSug(); // só números = código de barras
     const ps=semAcento(t).split(/\s+/);
-    sug=ESTOQUE.filter(p=>{const txt=semAcento([p.nome,p.sku,p.cor,p.tam,p.cat].join(" ")); return ps.every(x=>txt.includes(x));})
+    sug=ESTOQUE.filter(p=>{const txt=semAcento([p.nome,p.marca,p.sku,p.cor,p.tam,p.cat].join(" ")); return ps.every(x=>txt.includes(x));})
       .sort((a,b)=>(b.qtd>0)-(a.qtd>0)||a.nome.localeCompare(b.nome,"pt-BR")).slice(0,12);
     sel=Math.max(0,sug.findIndex(p=>p.qtd>0)); desenhaSug();
   };
@@ -1588,6 +1608,7 @@ function viewPDV(){
   $("#v_sug").addEventListener("mousedown",e=>{const b=e.target.closest("button[data-s]"); if(!b||b.disabled)return; e.preventDefault(); poe(sug[+b.dataset.s]); $("#v_code").focus();});
   $("#v_code").addEventListener("blur",()=>setTimeout(fechaSug,150));
   $("#v_add").addEventListener("click",add);
+  $("#v_descbtn").addEventListener("click",()=>{$("#v_descbtn").hidden=true;$("#v_descbox").hidden=false;$("#v_pct").focus();});
   $("#v_pct").addEventListener("input",()=>{descModo="pct";draw();});
   $("#v_desc").addEventListener("input",()=>{descModo="brl";draw();});
   $("#v_frete").addEventListener("input",draw);
