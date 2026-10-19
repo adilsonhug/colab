@@ -2349,6 +2349,24 @@ const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
   // tudo passa por funções do banco que exigem a sessão de login (ver seguranca-supabase.sql)
   let sb=null, TOKEN=null, ready=false, saving=false, pendingRemote=false, expirou=false, iniciado=false;
 
+  // login guardado neste navegador: sobrevive ao F5; cai após 4 h sem uso ou quando sai versão nova do sistema
+  const SESS_KEY="colab_sessao", INATIVO_MS=4*60*60*1000;
+  // "versão" = impressão digital do código desta página: qualquer atualização publicada muda o valor
+  const VERSAO=(()=>{const s=(document.currentScript&&document.currentScript.textContent)||""; let h=5381;
+    for(let i=0;i<s.length;i++) h=((h<<5)+h+s.charCodeAt(i))|0; return (h>>>0).toString(36)+"."+s.length;})();
+  const sessLer=()=>{ try{ return JSON.parse(localStorage.getItem(SESS_KEY)||"null"); }catch(e){ return null; } };
+  const sessGravar=o=>{ try{ localStorage.setItem(SESS_KEY,JSON.stringify(o)); }catch(e){} };
+  const sessApagar=()=>{ try{ localStorage.removeItem(SESS_KEY); }catch(e){} };
+  let ultimoUso=Date.now(), ultimoGravado=0;
+  const marcaUso=()=>{ ultimoUso=Date.now(); if(TOKEN&&ultimoUso-ultimoGravado>60000){ const s=sessLer(); if(s){ s.uso=ultimoUso; sessGravar(s); ultimoGravado=ultimoUso; } } };
+  ["mousedown","keydown","touchstart","wheel"].forEach(ev=>addEventListener(ev,marcaUso,{passive:true}));
+  setInterval(async()=>{ // inatividade com a página aberta
+    if(!TOKEN||Date.now()-ultimoUso<INATIVO_MS) return;
+    if(saving||sujos().length) return; // não derruba no meio de um salvamento
+    try{ await sb.rpc("logout",{p_token:TOKEN}); }catch(e){}
+    sessApagar(); TOKEN=null; ready=false; sessionStorage.setItem("colab_aviso","Você ficou mais de 4 horas sem usar o sistema. Entre de novo."); location.reload();
+  },60000);
+
   const pill=document.createElement("div");
   pill.style.cssText="position:fixed;right:12px;bottom:12px;z-index:999;font:600 12px var(--font-body,system-ui);padding:6px 10px;border-radius:999px;background:var(--surface,#fff);color:var(--muted,#666);border:1px solid var(--border,#ddd);box-shadow:var(--shadow);pointer-events:none;transition:opacity .3s";
   document.body.appendChild(pill);
@@ -2378,7 +2396,7 @@ const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
     return data;
   }
   function sessaoEncerrada(){
-    if(expirou||!TOKEN) return; expirou=true; ready=false;
+    if(expirou||!TOKEN) return; expirou=true; ready=false; sessApagar();
     const perde=sujos().length;
     status("Sessão encerrada — entre de novo","var(--crit)",true);
     modal(`<h3>Sessão encerrada</h3><p style="margin:0;font-size:13px;color:var(--muted)">Por segurança, entre de novo com sua senha.${perde?" Alterações feitas nos últimos segundos podem não ter sido salvas.":""}</p>
@@ -2424,9 +2442,10 @@ const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
     async entrar(user,senha){
       TOKEN=await rpc("login",{p_user:user,p_senha:senha});
       expirou=false; await loadAll(); ready=true; iniciar();
+      ultimoUso=ultimoGravado=Date.now(); sessGravar({token:TOKEN,user,ver:VERSAO,uso:ultimoUso});
       status("✓ Conectado — alterações são salvas automaticamente","var(--good)");
     },
-    async sair(){ if(TOKEN) await rpc("logout",{p_token:TOKEN}); TOKEN=null; ready=false; },
+    async sair(){ sessApagar(); if(TOKEN) await rpc("logout",{p_token:TOKEN}); TOKEN=null; ready=false; },
     async senhaAdminOk(senha){ return !!(await rpc("conferir_senha_admin",{p_token:TOKEN,p_senha:senha})); },
     async definirSenha(user,atual,nova){ await rpc("definir_senha",{p_token:TOKEN,p_user:user,p_atual:atual,p_nova:nova}); },
   };
@@ -2437,6 +2456,20 @@ const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
     sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY,{auth:{persistSession:false,autoRefreshToken:false}});
     try{ LOGIN_USERS=await rpc("lista_login")||[]; renderPills(); status("✓ Conectado","var(--good)"); }
     catch(e){ status("Não foi possível ler o banco: "+(e.message||e),"var(--crit)",true); $("#userPills").innerHTML='<span class="hint">Não foi possível carregar os usuários.</span>'; }
+    // volta direto para dentro do sistema depois do F5, se o login ainda vale
+    const aviso=sessionStorage.getItem("colab_aviso"); if(aviso){ sessionStorage.removeItem("colab_aviso"); $("#pwHint").textContent=aviso; }
+    const s=sessLer(); if(!s) return;
+    if(s.ver!==VERSAO){ sessApagar(); $("#pwHint").textContent="Sistema atualizado — entre de novo com sua senha."; return; }
+    if(!s.token||Date.now()-(s.uso||0)>=INATIVO_MS){ sessApagar(); $("#pwHint").textContent="Você ficou mais de 4 horas sem usar o sistema. Entre de novo."; return; }
+    status("Restaurando sua sessão…",null,true);
+    try{
+      const {data,error}=await sb.rpc("estado_ler",{p_token:s.token}); // sem modal de "sessão encerrada" se o token não vale mais
+      if(error) throw error;
+      TOKEN=s.token; (data||[]).forEach(applyRow);
+      const u=USERS.find(x=>x.id===s.user); if(!u||u.ativo===false) throw new Error("usuario");
+      SESSION=u; expirou=false; ready=true; iniciar(); marcaUso(); startApp();
+      status("✓ Conectado — alterações são salvas automaticamente","var(--good)");
+    }catch(e){ TOKEN=null; ready=false; sessApagar(); status("✓ Conectado","var(--good)"); $("#pwHint").textContent="Sua sessão expirou. Entre de novo com sua senha."; }
   })();
 })();
 
