@@ -195,6 +195,11 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
 .desc-link:hover{opacity:1}
 .desc-box{display:flex;gap:4px;padding-bottom:4px}
 .desc-box .inp{width:58px;padding:5px 6px;font-size:12px}
+/* cadastro em grade: quantidade de cada tamanho */
+.grade-tam{margin-top:8px;padding:8px 10px;border:1px dashed var(--border);border-radius:10px;background:var(--surface-2)}
+.grade-lin{display:flex;flex-wrap:wrap;gap:8px}
+.grade-lin label{display:flex;align-items:center;gap:5px}
+.grade-lin .inp{width:58px;padding:4px 6px}
 .scan-ico{width:42px;height:42px;border-radius:10px;background:var(--accent-soft);color:var(--accent);display:grid;place-items:center;flex:none}
 .scan-ico svg{width:22px;height:22px}
 tbody tr.hl{background:var(--accent-soft)}
@@ -2192,7 +2197,9 @@ function guardPreco(fn){
 }
 function sugerirCodigo(cat){
   const pre=(cat||"PRD").normalize("NFD").replace(/[^A-Za-z]/g,"").slice(0,3).toUpperCase()||"PRD";
-  let n=1; while(ESTOQUE.some(p=>p.sku===`${pre}-${String(n).padStart(3,"0")}`)) n++;
+  // pula também códigos usados como base de grade (ex.: CAM-001-38, CAM-001-40…)
+  const usado=c=>ESTOQUE.some(p=>p.sku===c||String(p.sku).startsWith(c+"-"));
+  let n=1; while(usado(`${pre}-${String(n).padStart(3,"0")}`)) n++;
   return `${pre}-${String(n).padStart(3,"0")}`;
 }
 function hojeISO(){const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;}
@@ -2218,9 +2225,10 @@ function modalProduto(pre={}){
       <div class="field"><label>Cor <span class="req">*</span></label>
         <input class="inp" id="p_cor" list="p_cores" placeholder="Ex.: Preto"><datalist id="p_cores">${cores.map(c=>`<option value="${esc(c)}">`).join("")}</datalist></div>
     </div>
-    <div class="field"><label>Tamanho <span class="req">*</span></label>
+    <div class="field"><label>Tamanho <span class="req">*</span> <span class="hint" id="p_tamhint" style="font-weight:500">· pode marcar vários para cadastrar a grade de uma vez</span></label>
       <div class="sizes" id="p_sizes">${TAMANHOS.map(t=>`<button type="button" data-t="${t}">${t}</button>`).join("")}
-        <input class="inp" id="p_tam" placeholder="Outro" style="width:90px;padding:4px 8px"></div></div>
+        <input class="inp" id="p_tam" placeholder="Outro" title="Outros tamanhos, separados por vírgula" style="width:90px;padding:4px 8px"></div>
+      <div id="p_grade" class="grade-tam" hidden></div></div>
     <div class="g g3" style="grid-template-columns:1.2fr 1.5fr 1fr">
       <div class="field"><label>Marca</label><input class="inp" id="p_marca" list="p_marcas" placeholder="Ex.: Puma">
         <datalist id="p_marcas">${marcasCad().map(m=>`<option value="${esc(m)}">`).join("")}</datalist></div>
@@ -2256,9 +2264,23 @@ function modalProduto(pre={}){
   pMk.addEventListener("input",pFromMk); pPreco.addEventListener("input",pFromPreco);
   $("#p_round").addEventListener("change",pFromMk);
 
-  const sizes=$("#p_sizes"), tam=$("#p_tam");
-  const marcaTam=()=>sizes.querySelectorAll("button").forEach(x=>x.classList.toggle("on",x.dataset.t===tam.value.trim()));
-  sizes.addEventListener("click",e=>{const b=e.target.closest("button");if(!b||existente)return; tam.value=b.dataset.t; marcaTam();});
+  // tamanhos: no cadastro novo dá para marcar vários (cria uma variação por tamanho, cada uma com sua quantidade)
+  const sizes=$("#p_sizes"), tam=$("#p_tam"), selTams=new Set(), qtdTam={};
+  const tamsSel=()=>{ const out=[...selTams]; String(tam.value).split(",").map(s=>s.trim()).filter(Boolean)
+    .forEach(t=>{ if(!out.some(x=>x.toLowerCase()===t.toLowerCase())) out.push(t); }); return out.sort(ordTam); };
+  const grade=()=>{
+    const ts=tamsSel(), g=$("#p_grade"), multi=!existente&&ts.length>1;
+    g.hidden=!multi;
+    $("#p_qtd").disabled=multi; $("#p_qlbl").textContent=multi?"Qtd. (por tamanho ↑)":(existente?"Qtd. que chegou":"Qtd. inicial");
+    $("#p_ean").disabled=multi&&!existente; $("#p_ean").placeholder=multi?"um código para cada tamanho (gerado)":"Bipe, digite ou deixe vazio para gerar";
+    if(!multi) return;
+    g.innerHTML=`<div class="hint" style="margin-bottom:4px">Quantidade de cada tamanho — serão cadastrados <b>${ts.length}</b> produtos (um por tamanho), cada um com seu código de barras.</div>
+      <div class="grade-lin">${ts.map(t=>`<label><span class="badge tam">${esc(t)}</span><input class="inp" type="number" min="0" data-gq="${esc(t)}" value="${qtdTam[t]??1}"></label>`).join("")}</div>`;
+    g.querySelectorAll("[data-gq]").forEach(x=>x.addEventListener("input",()=>{qtdTam[x.dataset.gq]=Math.max(0,parseInt(x.value)||0);}));
+  };
+  const marcaTam=()=>{ const ts=tamsSel(); sizes.querySelectorAll("button").forEach(x=>x.classList.toggle("on",ts.includes(x.dataset.t))); grade(); };
+  sizes.addEventListener("click",e=>{const b=e.target.closest("button");if(!b||existente)return;
+    const t=b.dataset.t; selTams.has(t)?selTams.delete(t):selTams.add(t); marcaTam();});
   tam.addEventListener("input",marcaTam);
   const sku=$("#p_sku"); let skuManual=false;
   sku.addEventListener("input",()=>skuManual=true);
@@ -2287,7 +2309,7 @@ function modalProduto(pre={}){
     $("#p_title").textContent="Entrada de mercadoria (reposição)";
     $("#p_qlbl").innerHTML='Qtd. que chegou <span class="req">*</span>';
     $("#p_save").textContent="Dar entrada no estoque";
-    $("#p_nome").value=p.nome; sku.value=p.sku; $("#p_cat").value=p.cat; $("#p_cor").value=p.cor||""; tam.value=p.tam||""; marcaTam();
+    $("#p_nome").value=p.nome; sku.value=p.sku; $("#p_cat").value=p.cat; $("#p_cor").value=p.cor||""; selTams.clear(); tam.value=p.tam||""; marcaTam();
     $("#p_marca").value=p.marca||"";
     $("#p_min").value=p.min;
     const hist=ENTRADAS.filter(e=>e.sku===p.sku).sort((a,b)=>b.data.localeCompare(a.data)), ult=hist[0];
@@ -2311,7 +2333,7 @@ function modalProduto(pre={}){
     $("#p_title").textContent="Cadastrar produto";
     $("#p_qlbl").textContent="Qtd. inicial"; $("#p_save").textContent="Salvar produto"; $("#p_aviso").innerHTML="";
     ["p_nome","p_cor","p_tam","p_marca","p_custo","p_mk","p_preco"].forEach(id=>$("#"+id).value="");
-    pCusto.placeholder="0,00"; $("#p_qtd").value=0; $("#p_min").value=5; skuManual=false; autoSku(); marcaTam(); pCalc();
+    pCusto.placeholder="0,00"; $("#p_qtd").value=0; $("#p_min").value=5; skuManual=false; autoSku(); selTams.clear(); marcaTam(); pCalc();
   };
   const checaCodigo=()=>{const p=acharProduto($("#p_ean").value); if(p){ if(p!==existente) modoEntrada(p); } else modoNovo();};
   $("#p_ean").addEventListener("input",checaCodigo);
@@ -2348,8 +2370,31 @@ function modalProduto(pre={}){
     }
 
     // ---- produto novo
+    const ts=tamsSel();
+    if(ts.length>1){ // ---- grade: um produto por tamanho
+      const base={nome:$("#p_nome").value.trim(), cat:$("#p_cat").value, cor:$("#p_cor").value.trim(), marca:$("#p_marca").value.trim(),
+        custo:custoIn||0, preco, min, forn:forn!=="—"?forn:""};
+      const skuBase=sku.value.trim().toUpperCase();
+      if(!base.nome) return err("Informe a descrição do produto.");
+      if(!skuBase) return err("Informe o código do produto.");
+      if(!base.cor) return err("Informe a cor.");
+      if(isNaN(preco)||preco<=0) return err("Informe o preço de venda.");
+      const novos=ts.map(t=>({...base,sku:`${skuBase}-${String(t).toUpperCase().replace(/\s+/g,"")}`,tam:t,qtd:Math.max(0,qtdTam[t]??1)}));
+      const rep=novos.find(d=>ESTOQUE.some(p=>p.sku===d.sku)); if(rep) return err(`O código ${rep.sku} já existe. Mude o código base.`);
+      pedeSenha(()=>{
+        novos.forEach(d=>{ d.ean=gerarEAN(); ESTOQUE.push(d); // gera um por vez: cada tamanho ganha código de barras diferente
+          if(d.qtd>0) ENTRADAS.unshift({id:ENTRADAS.length+1,data,forn,sku:d.sku,nome:d.nome,qtd:d.qtd,custo:d.custo,preco:d.preco}); });
+        EF=novoEF(); EF.q=base.nome; ESTQ_HL=null;
+        closeModal(); current="estoque"; renderNav(); route();
+        const pecas=novos.reduce((s,d)=>s+d.qtd,0);
+        toast(`${base.nome}: ${novos.length} tamanhos cadastrados (${pecas} peças).`);
+        const comQtd=novos.filter(d=>d.qtd>0);
+        if(comQtd.length) modalEtiquetas(comQtd.map(p=>({p,n:p.qtd})),"Imprimir etiquetas?",`${esc(base.nome)}: ${novos.length} tamanhos cadastrados. Quer imprimir as etiquetas agora?`);
+      },"Cadastrar produto define o preço de venda. Confirme com a senha do administrador.");
+      return;
+    }
     const d={ean:$("#p_ean").value.trim(), nome:$("#p_nome").value.trim(), sku:sku.value.trim().toUpperCase(),
-      cat:$("#p_cat").value, cor:$("#p_cor").value.trim(), tam:tam.value.trim(), marca:$("#p_marca").value.trim(),
+      cat:$("#p_cat").value, cor:$("#p_cor").value.trim(), tam:ts[0]||"", marca:$("#p_marca").value.trim(),
       custo:custoIn||0, preco, qtd:Math.max(0,qtd||0), min, forn:forn!=="—"?forn:""};
     if(d.ean&&!/^\d{6,14}$/.test(d.ean)) return err("Código de barras deve ter só números (6 a 14 dígitos).");
     if(!d.nome) return err("Informe a descrição do produto.");
