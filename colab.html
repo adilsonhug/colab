@@ -1730,12 +1730,29 @@ function viewPDV(){
     }
     const dataISO=$("#v_data").value; if(!dataISO) return msg("Informe a data da venda.");
     const valor=+total().toFixed(2), tipo=$("#v_tipo").value, fr=frete();
-    // Pix: mostra o QR Code com o valor; a venda só é registrada depois de confirmar que o Pix caiu
-    if($("#v_pay").value==="Pix"&&valor>0){
-      const txid="COLAB"+Date.now().toString(36).toUpperCase();
-      return modalPix(valor,txid,()=>registrarVenda(dataISO,valor,tipo,fr));
-    }
-    registrarVenda(dataISO,valor,tipo,fr);
+    const pay=$("#v_pay").value, vend=$("#v_vend").value, pecas=cart.reduce((s,i)=>s+i.qtd,0), dsc=desc();
+    // confirmação final antes de registrar (resumo da venda)
+    modal(`<h3>Confirmar venda?</h3>
+      <div class="tw" style="border:1px solid var(--border);border-radius:10px;max-height:34vh;overflow:auto"><table style="min-width:0">
+        <tbody>${cart.map(i=>`<tr><td><b>${esc(i.p.nome)}</b><div class="hint">${esc(corCurta(i.p))} · Tam. ${esc(i.p.tam||"—")}</div></td>
+          <td class="num tnum" style="white-space:nowrap">${i.qtd} × ${brl(i.preco)}</td><td class="num tnum" style="white-space:nowrap"><b>${brl(i.qtd*i.preco)}</b></td></tr>`).join("")}</tbody></table></div>
+      <div class="infobox" style="gap:4px">
+        <div style="display:flex;justify-content:space-between"><span style="color:var(--muted)">Pagamento</span><b>${esc(pay)}</b></div>
+        <div style="display:flex;justify-content:space-between"><span style="color:var(--muted)">Vendedor</span><b>${esc(vend)}</b></div>
+        ${dsc||fr?`<div style="display:flex;justify-content:space-between"><span style="color:var(--muted)">Ajustes</span><b class="tnum">${dsc?"−"+brl(dsc):""}${dsc&&fr?" / ":""}${fr?"+"+brl(fr):""}</b></div>`:""}
+      </div>
+      <div class="total-bar"><span>Total · ${pecas} peça(s)</span><b class="tnum">${brl(valor)}</b></div>
+      <div class="row"><button class="btn ghost" data-close>Voltar</button><button class="btn" id="cf_ok">${pay==="Pix"?"Confirmar e gerar Pix":"Confirmar venda"}</button></div>`,"wide");
+    setTimeout(()=>$("#cf_ok")?.focus(),30);
+    $("#cf_ok").addEventListener("click",()=>{
+      closeModal();
+      // Pix: mostra o QR Code com o valor; a venda só é registrada depois de confirmar que o Pix caiu
+      if(pay==="Pix"&&valor>0){
+        const txid="COLAB"+Date.now().toString(36).toUpperCase();
+        return modalPix(valor,txid,()=>registrarVenda(dataISO,valor,tipo,fr));
+      }
+      registrarVenda(dataISO,valor,tipo,fr);
+    });
   });
   function registrarVenda(dataISO,valor,tipo,fr){
     cart.forEach(i=>i.p.qtd-=i.qtd);
