@@ -526,6 +526,7 @@ const NAV=[
   {id:"importar",label:"Importar nota",icon:'<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M12 11v6M9 14l3 3 3-3"/>'},
   {id:"entradas",label:"Entradas",icon:'<path d="M12 3v12M8 11l4 4 4-4M4 21h16"/>'},
   {id:"despesas",label:"Despesas",icon:'<rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/>'},
+  {id:"saidas",label:"Condicional / Ajuste",icon:'<path d="M16 3h5v5M21 3l-7 7M8 21H3v-5M3 21l7-7"/>'},
   {id:"comissao",label:"Comissão",icon:'<path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>'},
   {id:"conta",label:"Usuários",labelFunc:"Minha conta",icon:'<circle cx="9" cy="8" r="4"/><path d="M2 21v-2a4 4 0 0 1 4-4h6a4 4 0 0 1 4 4v2M19 8v6M16 11h6"/>'},
 ];
@@ -552,10 +553,10 @@ $("#theme").addEventListener("click",()=>{
 
 /* ---------------- VIEWS ---------------- */
 function route(){
-  const titles={dash:"Painel",pdv:"Nova venda",vendas:"Vendas & Caixa",estoque:"Estoque",entradas:"Relatório de entradas",importar:"Importar nota / cupom",inventario:"Inventário",despesas:"Despesas",fech:"Fechamento do mês",comissao:"Comissão",conta:SESSION.role==="admin"?"Painel de controle — usuários":"Minha conta"};
+  const titles={dash:"Painel",pdv:"Nova venda",vendas:"Vendas & Caixa",estoque:"Estoque",entradas:"Relatório de entradas",importar:"Importar nota / cupom",inventario:"Inventário",despesas:"Despesas",fech:"Fechamento do mês",comissao:"Comissão",saidas:"Condicional e costureira",conta:SESSION.role==="admin"?"Painel de controle — usuários":"Minha conta"};
   $("#pageTitle").textContent=titles[current];
   $("#topExtra").innerHTML="";
-  ({dash:viewDash,pdv:viewPDV,importar:viewImportar,vendas:viewVendas,estoque:viewEstoque,entradas:viewEntradas,inventario:viewInventario,despesas:viewDespesas,fech:viewFech,comissao:viewComissao,conta:viewConta}[current])();
+  ({dash:viewDash,pdv:viewPDV,importar:viewImportar,vendas:viewVendas,estoque:viewEstoque,entradas:viewEntradas,inventario:viewInventario,despesas:viewDespesas,fech:viewFech,comissao:viewComissao,saidas:viewSaidas,conta:viewConta}[current])();
 }
 
 let DASH_ANO=MES_ATUAL.slice(0,4), DASH_DIA="g";
@@ -822,7 +823,7 @@ function viewEstoque(){
       <td>${esc(p.marca||"—")}</td>
       ${isAdmin?`<td class="num tnum">${brl(p.custo)}</td>`:""}
       <td class="num tnum">${brl(p.preco)}</td>
-      <td class="num tnum ${st[0]}" title="${st[1]}">${p.qtd}</td>
+      <td class="num tnum ${st[0]}" title="${st[1]}${p.fora?` · ${p.fora} fora da loja (condicional/costureira)`:""}">${p.qtd}${p.fora?`<div style="font-size:10px;font-weight:700;color:var(--info);white-space:nowrap">+${p.fora} fora</div>`:""}</td>
       <td style="text-align:right"><button class="icon-btn" style="width:30px;height:30px" data-editprod="${i}" title="Editar produto">${ICO_EDIT}</button></td></tr>`;
   };
   $("#view").innerHTML=`
@@ -1557,6 +1558,9 @@ function askAdminPw(onOk,msg){
 
 function agoraStr(){return new Date().toLocaleString("pt-BR",{dateStyle:"short",timeStyle:"short"});}
 let PDV={cart:[],ultima:null};
+// peças que saem da loja e voltam: condicional (cliente leva para provar) ou costureira (ajuste).
+// Enquanto estão fora, saem do estoque disponível (p.qtd) e ficam contadas em p.fora.
+let SAIDAS=[];
 // produto genérico (código 123456): usado quando a peça não está cadastrada, para não travar a venda.
 // Só nele o preço é editado na venda e o estoque não bloqueia (ajusta depois).
 const COD_GENERICO="123456";
@@ -1815,6 +1819,138 @@ function viewPDV(){
     VENDAS.push(v); somaFaturamento(dataISO,valor,tipo,fr);
     PDV={cart:[],ultima:v}; viewPDV(); toast(`Venda de ${brl(valor)} registrada. Estoque baixado.`);
   }
+}
+
+/* ---------------- CONDICIONAL / COSTUREIRA ---------------- */
+let SAIF="abertas";
+const saiResto=it=>it.qtd-(it.ret||0)-(it.vend||0);           // peças desse item que ainda estão fora
+const saiAberta=s=>s.itens.some(it=>saiResto(it)>0);
+const saiAtrasada=s=>saiAberta(s)&&s.prev&&s.prev<hojeISO();
+const diasEntre=(a,b)=>Math.round((new Date(b+"T12:00")-new Date(a+"T12:00"))/864e5);
+function viewSaidas(){
+  const abertas=SAIDAS.filter(saiAberta);
+  const fora=t=>abertas.filter(s=>!t||s.tipo===t).reduce((n,s)=>n+s.itens.reduce((m,it)=>m+saiResto(it),0),0);
+  const lista=(SAIF==="abertas"?abertas:SAIDAS).slice().sort((a,b)=>saiAberta(b)-saiAberta(a)||String(b.data).localeCompare(String(a.data))||b.id-a.id);
+  const hoje=hojeISO();
+  $("#view").innerHTML=`
+  <div class="section">
+    <div class="tiles compact" style="margin-bottom:14px">
+      <div class="tile"><div class="lbl">Peças fora da loja</div><div class="val tnum">${fora()}</div></div>
+      <div class="tile"><div class="lbl"><span class="dot" style="background:#3257c5"></span>Em condicional</div><div class="val tnum">${fora("Condicional")}</div><div class="sub">${abertas.filter(s=>s.tipo==="Condicional").length} cliente(s)</div></div>
+      <div class="tile"><div class="lbl"><span class="dot" style="background:var(--warn)"></span>Na costureira</div><div class="val tnum">${fora("Costureira")}</div><div class="sub">${abertas.filter(s=>s.tipo==="Costureira").length} saída(s)</div></div>
+      <div class="tile"><div class="lbl"><span class="dot" style="background:var(--crit)"></span>Atrasadas</div><div class="val tnum" style="${abertas.some(saiAtrasada)?"color:var(--crit)":""}">${abertas.filter(saiAtrasada).length}</div><div class="sub">passaram da previsão</div></div>
+    </div>
+    <div class="toolbar">
+      <button class="btn" id="sai_nova">+ Nova saída</button>
+      <div class="sizes" id="sai_f"><button type="button" data-f="abertas" class="${SAIF==="abertas"?"on":""}">Em aberto</button><button type="button" data-f="todas" class="${SAIF==="todas"?"on":""}">Todas</button></div>
+    </div>
+    <div class="card"><div class="card-b pad0"><div class="tw"><table>
+      <thead><tr><th>Tipo</th><th>Para quem</th><th>Saída</th><th>Previsão</th><th>Peças</th><th>Situação</th><th></th></tr></thead>
+      <tbody>${lista.length?lista.map(s=>{
+        const ab=saiAberta(s), atr=saiAtrasada(s), resto=s.itens.reduce((n,it)=>n+saiResto(it),0), tot=s.itens.reduce((n,it)=>n+it.qtd,0);
+        const vend=s.itens.reduce((n,it)=>n+(it.vend||0),0);
+        return `<tr${atr?' style="background:var(--crit-soft)"':""}>
+          <td><span class="chip ${s.tipo==="Condicional"?"info":"warn"}">${s.tipo==="Condicional"?"Condicional":"Costureira"}</span></td>
+          <td><b>${esc(s.pessoa)}</b>${s.contato?`<div class="hint">${esc(s.contato)}</div>`:""}${s.obs?`<div class="hint">${esc(s.obs)}</div>`:""}</td>
+          <td class="tnum">${fmtDate(s.data)}<div class="hint">${esc(s.user||"")}</div></td>
+          <td class="tnum">${s.prev?fmtDate(s.prev):"—"}${ab&&s.prev?`<div class="hint" style="${atr?"color:var(--crit);font-weight:700":""}">${atr?`atrasada ${diasEntre(s.prev,hoje)} dia(s)`:s.prev===hoje?"vence hoje":`faltam ${diasEntre(hoje,s.prev)} dia(s)`}</div>`:""}</td>
+          <td style="max-width:280px"><div class="hint" style="color:var(--fg)">${s.itens.map(it=>`${it.qtd>1?it.qtd+"× ":""}${esc(it.nome)} <span style="color:var(--muted)">(${esc(it.cor||"")}${it.cor&&it.tam?" · ":""}${esc(it.tam||"")})</span>`).join("<br>")}</div></td>
+          <td>${ab?`<b>${resto}</b> de ${tot} fora`:`<span class="chip good">Concluída</span>`}${vend?`<div class="hint">${vend} vendida(s)</div>`:""}${!ab&&s.fechada?`<div class="hint">${esc(s.fechada)}</div>`:""}</td>
+          <td style="text-align:right">${ab?`<button class="btn sm" data-ret="${s.id}">Dar retorno</button>`:""}</td></tr>`;}).join("")
+        :`<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:24px">${SAIF==="abertas"?"Nenhuma peça fora da loja agora.":"Nenhuma saída registrada ainda."}</td></tr>`}</tbody>
+    </table></div></div></div>
+  </div>`;
+  $("#sai_nova").addEventListener("click",()=>modalNovaSaida());
+  $("#sai_f").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;SAIF=b.dataset.f;viewSaidas();});
+  $("#view").querySelectorAll("[data-ret]").forEach(b=>b.addEventListener("click",()=>modalRetornoSaida(SAIDAS.find(s=>s.id===+b.dataset.ret))));
+}
+function modalNovaSaida(){
+  const itens=[]; // {p, qtd}
+  const somaDias=(n)=>{const d=new Date();d.setDate(d.getDate()+n);return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;};
+  modal(`<h3>Nova saída de peças</h3>
+    <div class="g g2">
+      <div class="field"><label>Tipo <span class="req">*</span></label><select class="inp" id="sa_tipo"><option value="Condicional">Condicional (cliente leva para provar)</option><option value="Costureira">Costureira (ajuste)</option></select></div>
+      <div class="field"><label>Previsão de retorno</label><input class="inp" id="sa_prev" type="date" value="${somaDias(2)}"></div>
+    </div>
+    <div class="g g2">
+      <div class="field"><label id="sa_plbl">Cliente <span class="req">*</span></label><input class="inp" id="sa_pessoa" placeholder="Nome"></div>
+      <div class="field"><label>Telefone</label><input class="inp" id="sa_contato" placeholder="(49) 9…" inputmode="tel"></div>
+    </div>
+    <div class="field"><label>Observação</label><input class="inp" id="sa_obs" placeholder="Ex.: fazer barra 2 cm / cliente volta sábado"></div>
+    <div class="field"><label>Peças <span class="req">*</span></label>
+      <div class="scanbar"><input class="inp" id="sa_code" autocomplete="off" placeholder="Bipe o código de barras (ou digite o código)"><button class="btn ghost" type="button" id="sa_add">Adicionar</button></div></div>
+    <div id="sa_lista"></div>
+    <div class="err" id="sa_err"></div>
+    <div class="row"><button class="btn ghost" data-close>Cancelar</button><button class="btn" id="sa_ok">Registrar saída</button></div>`,"wide");
+  const err=t=>{$("#sa_err").textContent=t;};
+  $("#sa_tipo").addEventListener("change",e=>{ const c=e.target.value==="Condicional";
+    $("#sa_plbl").innerHTML=(c?"Cliente":"Costureira")+' <span class="req">*</span>'; $("#sa_prev").value=somaDias(c?2:7); });
+  const draw=()=>{
+    $("#sa_lista").innerHTML=itens.length?`<div class="tw" style="border:1px solid var(--border);border-radius:10px"><table style="min-width:0"><tbody>
+      ${itens.map((x,k)=>`<tr><td><b>${esc(x.p.nome)}</b><div class="hint">${esc(corCurta(x.p))} · Tam. ${esc(x.p.tam||"—")} · ${x.p.qtd} em estoque</div></td>
+        <td class="num"><input class="inp" type="number" min="1" max="${x.p.qtd}" data-sq="${k}" value="${x.qtd}" style="width:64px"></td>
+        <td><button class="icon-btn" style="width:28px;height:28px" data-srm="${k}" title="Remover">×</button></td></tr>`).join("")}</tbody></table></div>`
+      :`<div class="infobox" style="text-align:center;color:var(--muted)">Nenhuma peça ainda. Bipe as peças que vão sair.</div>`;
+    $("#sa_lista").querySelectorAll("[data-sq]").forEach(x=>x.addEventListener("change",()=>{const it=itens[+x.dataset.sq], q=Math.max(1,parseInt(x.value)||1);
+      if(q>it.p.qtd){err(`Só há ${it.p.qtd} un. de ${it.p.nome} em estoque.`); it.qtd=it.p.qtd;} else it.qtd=q; draw();}));
+    $("#sa_lista").querySelectorAll("[data-srm]").forEach(x=>x.addEventListener("click",()=>{itens.splice(+x.dataset.srm,1);draw();}));
+  };
+  const add=()=>{ const c=$("#sa_code").value.trim(); if(!c) return; $("#sa_code").value=""; err("");
+    const p=acharProduto(c); if(!p) return err(`Código ${c} não cadastrado.`);
+    const it=itens.find(x=>x.p===p), ja=it?it.qtd:0;
+    if(ja+1>p.qtd) return err(`Sem estoque disponível de ${p.nome} (${corCurta(p)} · ${p.tam}).`);
+    it?it.qtd++:itens.push({p,qtd:1}); draw(); $("#sa_code").focus(); };
+  $("#sa_add").addEventListener("click",add);
+  $("#sa_code").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();add();}});
+  draw(); setTimeout(()=>$("#sa_pessoa")?.focus(),50);
+  $("#sa_ok").addEventListener("click",()=>{
+    const tipo=$("#sa_tipo").value, pessoa=$("#sa_pessoa").value.trim();
+    if(!pessoa) return err(tipo==="Condicional"?"Informe o nome do cliente.":"Informe o nome da costureira.");
+    if(!itens.length) return err("Bipe pelo menos uma peça.");
+    const falta=itens.find(x=>x.qtd>x.p.qtd); if(falta) return err(`Estoque insuficiente de ${falta.p.nome}.`);
+    itens.forEach(x=>{ x.p.qtd-=x.qtd; x.p.fora=(x.p.fora||0)+x.qtd; });
+    const s={id:SAIDAS.reduce((m,x)=>Math.max(m,x.id),0)+1,tipo,pessoa,contato:$("#sa_contato").value.trim(),obs:$("#sa_obs").value.trim(),
+      data:hojeISO(),prev:$("#sa_prev").value||"",user:SESSION.name,
+      itens:itens.map(x=>({sku:x.p.sku,nome:x.p.nome,cor:corCurta(x.p),tam:x.p.tam,qtd:x.qtd,ret:0,vend:0}))};
+    SAIDAS.push(s); closeModal(); SAIF="abertas"; current="saidas"; renderNav(); route();
+    toast(`${tipo==="Condicional"?"Condicional":"Saída para costureira"} registrada: ${s.itens.reduce((n,it)=>n+it.qtd,0)} peça(s) com ${pessoa}.`);
+  });
+}
+function modalRetornoSaida(s){
+  if(!s) return;
+  const cond=s.tipo==="Condicional", pend=s.itens.map((it,k)=>({it,k,resto:saiResto(it)})).filter(x=>x.resto>0);
+  modal(`<h3>Retorno — ${esc(s.pessoa)}</h3>
+    <p style="margin:0;font-size:13px;color:var(--muted)">${cond?"Condicional":"Costureira"} desde ${fmtDate(s.data)}. Informe o que ${cond?"voltou e o que o cliente comprou":"voltou da costureira"}.${cond?" O que for comprado vai para a Nova venda.":""}</p>
+    <div class="tw" style="border:1px solid var(--border);border-radius:10px"><table style="min-width:0">
+      <thead><tr><th>Peça</th><th class="num">Fora</th><th class="num">Voltou</th>${cond?'<th class="num">Comprou</th>':""}</tr></thead>
+      <tbody>${pend.map(x=>`<tr><td><b>${esc(x.it.nome)}</b><div class="hint">${esc(x.it.cor||"")} · Tam. ${esc(x.it.tam||"—")}</div></td>
+        <td class="num tnum">${x.resto}</td>
+        <td class="num"><input class="inp" type="number" min="0" max="${x.resto}" data-rv="${x.k}" value="${cond?0:x.resto}" style="width:60px"></td>
+        ${cond?`<td class="num"><input class="inp" type="number" min="0" max="${x.resto}" data-rc="${x.k}" value="0" style="width:60px"></td>`:""}</tr>`).join("")}</tbody></table></div>
+    ${cond?`<div style="display:flex;gap:8px"><button class="btn ghost sm" type="button" id="rt_tudov">Tudo voltou</button><button class="btn ghost sm" type="button" id="rt_tudoc">Comprou tudo</button></div>`:""}
+    <div class="err" id="rt_err"></div>
+    <div class="row"><button class="btn ghost" data-close>Cancelar</button><button class="btn" id="rt_ok">Confirmar retorno</button></div>`,"wide");
+  const val=(a,k)=>Math.max(0,parseInt($(`[data-${a}="${k}"]`)?.value)||0);
+  $("#rt_tudov")?.addEventListener("click",()=>pend.forEach(x=>{$(`[data-rv="${x.k}"]`).value=x.resto;$(`[data-rc="${x.k}"]`).value=0;}));
+  $("#rt_tudoc")?.addEventListener("click",()=>pend.forEach(x=>{$(`[data-rc="${x.k}"]`).value=x.resto;$(`[data-rv="${x.k}"]`).value=0;}));
+  $("#rt_ok").addEventListener("click",()=>{
+    const mov=pend.map(x=>({...x,v:val("rv",x.k),c:cond?val("rc",x.k):0}));
+    const exc=mov.find(m=>m.v+m.c>m.resto); if(exc) return $("#rt_err").textContent=`${exc.it.nome}: voltou + comprou passa das ${exc.resto} peça(s) fora.`;
+    if(!mov.some(m=>m.v||m.c)) return $("#rt_err").textContent="Informe pelo menos uma peça que voltou ou foi comprada.";
+    const vendidas=[];
+    mov.forEach(m=>{ const n=m.v+m.c; if(!n) return;
+      m.it.ret=(m.it.ret||0)+m.v; m.it.vend=(m.it.vend||0)+m.c;
+      const p=ESTOQUE.find(x=>x.sku===m.it.sku);
+      if(p){ p.qtd+=n; p.fora=Math.max(0,(p.fora||0)-n); if(m.c) vendidas.push({p,qtd:m.c}); } // comprado volta ao estoque e sai pela venda normal
+    });
+    if(!saiAberta(s)) s.fechada=`Concluída em ${agoraStr()}`;
+    closeModal();
+    if(vendidas.length){
+      vendidas.forEach(({p,qtd})=>{const it=PDV.cart.find(i=>i.p===p); it?it.qtd+=qtd:PDV.cart.push({p,qtd,preco:p.preco});});
+      PDV.ultima=null; current="pdv"; renderNav(); route();
+      toast(`Peças compradas por ${s.pessoa} foram para a Nova venda. Finalize a venda.`);
+    } else { viewSaidas(); toast(`Retorno registrado (${s.pessoa}).`); }
+  });
 }
 
 /* ---------------- CATEGORIAS (admin) ---------------- */
@@ -2569,6 +2705,7 @@ const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
     diario:    [()=>DIARIO,      v=>{DIARIO.splice(0,DIARIO.length,...v);}],
     mes:       [()=>MES,         v=>{Object.keys(MES).forEach(k=>delete MES[k]);Object.assign(MES,v);}],
     comissao:  [()=>COMISSAO,    v=>{COMISSAO.splice(0,COMISSAO.length,...v);}],
+    saidas:    [()=>SAIDAS,      v=>{SAIDAS=v;}], // condicional / costureira
   };
   const saved={}, verLocal={};
   for(const k in KEYS) saved[k]=JSON.stringify(KEYS[k][0]());
