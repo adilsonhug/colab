@@ -596,11 +596,14 @@ function viewDash(){
   // vendas do mês: por marca (a partir dos itens bipados) e por forma de pagamento
   const VM=VENDAS.filter(v=>String(v.dataISO||"").startsWith(MES_ATUAL));
   const marcaDe=sku=>{const p=ESTOQUE.find(x=>x.sku===sku); return (p&&String(p.marca||"").trim())||"Sem marca";};
-  const porMarca={}; let semItens=0;
-  VM.forEach(v=>{ if(!(v.itens||[]).length){ semItens+=v.valor; return; }
-    v.itens.forEach(it=>{const m=marcaDe(it.sku), o=porMarca[m]||(porMarca[m]={pecas:0,valor:0}); o.pecas+=it.qtd; o.valor+=it.qtd*it.preco;}); });
-  const marcas=Object.entries(porMarca).sort((a,b)=>b[1].valor-a[1].valor);
-  const totMarcas=marcas.reduce((s,[,o])=>s+o.valor,0);
+  // valor por marca proporcional ao que foi pago (já com desconto/frete), para o total bater com o faturamento
+  const porMarca={}; let semItens=0, semItensN=0;
+  VM.forEach(v=>{ const its=v.itens||[], bruto=its.reduce((s,it)=>s+it.qtd*it.preco,0);
+    if(!its.length||!bruto){ semItens+=v.valor; semItensN++; return; }
+    const fator=v.valor/bruto;
+    its.forEach(it=>{const m=marcaDe(it.sku), o=porMarca[m]||(porMarca[m]={pecas:0,valor:0}); o.pecas+=it.qtd; o.valor+=it.qtd*it.preco*fator;}); });
+  const marcas=Object.entries(porMarca).sort((a,b)=>(a[0]==="Sem marca")-(b[0]==="Sem marca")||b[1].valor-a[1].valor);
+  const totMarcas=marcas.reduce((s,[,o])=>s+o.valor,0)+semItens;
   const porPag={}; VM.forEach(v=>{const k=v.pay||"Não informado", o=porPag[k]||(porPag[k]={valor:0,n:0}); o.valor+=v.valor; o.n++;});
   const pags=Object.entries(porPag).sort((a,b)=>(a[0]==="Não informado")-(b[0]==="Não informado")||b[1].valor-a[1].valor);
   const totPag=pags.reduce((s,[,o])=>s+o.valor,0);
@@ -622,14 +625,15 @@ function viewDash(){
     <div class="grid2">
       <div class="card">
         <div class="card-h"><h3>Vendas por marca — mês</h3><span class="chip good">${brl(totMarcas)}</span></div>
-        <div class="card-b pad0">${marcas.length?`<div class="tw" style="max-height:300px;overflow:auto"><table style="min-width:0">
+        <div class="card-b pad0">${marcas.length||semItens?`<div class="tw" style="max-height:300px;overflow:auto"><table style="min-width:0">
           <thead><tr><th>Marca</th><th class="num">Peças</th><th class="num">Valor</th><th style="width:30%"></th></tr></thead>
-          <tbody>${marcas.map(([m,o])=>{const pct=totMarcas?Math.round(o.valor/totMarcas*100):0; return `<tr>
-            <td><b>${esc(m)}</b></td><td class="num tnum">${o.pecas}</td><td class="num tnum">${brl(o.valor)}</td>
-            <td><div style="display:flex;align-items:center;gap:6px"><div style="flex:1;height:7px;background:var(--surface-2);border-radius:999px;overflow:hidden"><div style="height:100%;width:${pct}%;background:var(--accent)"></div></div><span class="hint tnum" style="min-width:30px;text-align:right">${pct}%</span></div></td></tr>`;}).join("")}</tbody>
-          <tfoot><tr><td>Total</td><td class="num tnum">${marcas.reduce((s,[,o])=>s+o.pecas,0)}</td><td class="num tnum">${brl(totMarcas)}</td><td></td></tr></tfoot></table></div>`
-          :`<div class="infobox" style="margin:14px;text-align:center;color:var(--muted)">Nenhuma venda com produtos bipados neste mês.</div>`}
-          <div class="hint" style="padding:8px 14px 12px">Pelos produtos bipados na Nova venda (valor antes de desconto).${semItens?` Fechamentos sem itens detalhados (${brl(semItens)}) não entram aqui.`:""}</div></div>
+          <tbody>${[...marcas.map(([m,o])=>[m,o,false]),...(semItens?[["Sem detalhe de produto",{pecas:null,valor:semItens},true]]:[])].map(([m,o,sd])=>{const pct=totMarcas?Math.round(o.valor/totMarcas*100):0; return `<tr${sd?' style="color:var(--muted)"':""}>
+            <td>${sd?`<span title="${semItensN} venda(s)/fechamento(s) sem os produtos registrados (planilha ou lançamento sem bipar)">${esc(m)} <span class="hint">· ${semItensN}</span></span>`:`<b>${esc(m)}</b>`}</td>
+            <td class="num tnum">${o.pecas??"—"}</td><td class="num tnum">${brl(o.valor)}</td>
+            <td><div style="display:flex;align-items:center;gap:6px"><div style="flex:1;height:7px;background:var(--surface-2);border-radius:999px;overflow:hidden"><div style="height:100%;width:${pct}%;background:${sd?"#8a94a6":"var(--accent)"}"></div></div><span class="hint tnum" style="min-width:30px;text-align:right">${pct}%</span></div></td></tr>`;}).join("")}</tbody>
+          <tfoot><tr><td>Total do mês</td><td class="num tnum">${marcas.reduce((s,[,o])=>s+o.pecas,0)}</td><td class="num tnum">${brl(totMarcas)}</td><td></td></tr></tfoot></table></div>`
+          :`<div class="infobox" style="margin:14px;text-align:center;color:var(--muted)">Nenhuma venda neste mês.</div>`}
+          <div class="hint" style="padding:8px 14px 12px">A marca vem dos produtos bipados na Nova venda; o valor já considera desconto e frete. ${semItens?"“Sem detalhe de produto” são vendas sem os itens registrados (fechamentos da planilha ou lançadas sem bipar).":""}</div></div>
       </div>
       <div class="card">
         <div class="card-h"><h3>Por forma de pagamento — mês</h3><span class="chip good">${brl(totPag)}</span></div>
