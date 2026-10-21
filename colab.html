@@ -1641,7 +1641,7 @@ function viewPDV(){
         </div>
         <div class="formrow">
           <div class="field"><label>Pagamento</label><select class="inp" id="v_pay">${PAGAMENTOS.map(p=>`<option>${p}</option>`).join("")}</select></div>
-          <div class="field"><label>Tipo</label><select class="inp" id="v_tipo"><option>Loja física</option><option>Online</option></select></div>
+          <div class="field"><label>Tipo <span class="req">*</span></label><select class="inp" id="v_tipo"><option value="" selected>Selecione…</option><option>Loja física</option><option>Online</option></select></div>
         </div>
         <div style="display:flex;gap:10px;align-items:flex-end">
           <div class="field" style="flex:1"><label>Frete (R$)</label><input class="inp" id="v_frete" inputmode="decimal" placeholder="0,00"></div>
@@ -1776,6 +1776,11 @@ function viewPDV(){
       return;
     }
     const dataISO=$("#v_data").value; if(!dataISO) return msg("Informe a data da venda.");
+    if(!$("#v_tipo").value){ // tipo obrigatório: loja física ou online
+      const t=$("#v_tipo"); t.style.borderColor="var(--crit)"; t.focus();
+      t.addEventListener("change",()=>{t.style.borderColor="";},{once:true});
+      return msg("Escolha o tipo da venda: Loja física ou Online.");
+    }
     const valor=+total().toFixed(2), tipo=$("#v_tipo").value, fr=frete();
     const pay=$("#v_pay").value, vend=$("#v_vend").value, pecas=cart.reduce((s,i)=>s+i.qtd,0), dsc=desc();
     // confirmação final antes de registrar (resumo da venda)
