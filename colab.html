@@ -1637,7 +1637,7 @@ function viewPDV(){
       <div class="card"><div class="card-h"><h3>Pagamento</h3></div><div class="card-b" style="display:flex;flex-direction:column;gap:12px">
         <div class="formrow">
           <div class="field"><label>Data da venda</label><input class="inp" id="v_data" type="date" value="${hojeISO()}"></div>
-          <div class="field"><label>Vendedor</label><select class="inp" id="v_vend" ${isAdmin?"":"disabled"}>${vendedores.map(u=>`<option ${u.id===SESSION.id?"selected":""}>${esc(u.name)}</option>`).join("")}</select></div>
+          <div class="field"><label>Vendedor <span class="req">*</span></label><select class="inp" id="v_vend"><option value="" selected>Selecione…</option>${(isAdmin?vendedores:vendedores.filter(u=>u.id===SESSION.id)).map(u=>`<option>${esc(u.name)}</option>`).join("")}</select></div>
         </div>
         <div class="formrow">
           <div class="field"><label>Pagamento</label><select class="inp" id="v_pay">${PAGAMENTOS.map(p=>`<option>${p}</option>`).join("")}</select></div>
@@ -1776,11 +1776,11 @@ function viewPDV(){
       return;
     }
     const dataISO=$("#v_data").value; if(!dataISO) return msg("Informe a data da venda.");
-    if(!$("#v_tipo").value){ // tipo obrigatório: loja física ou online
-      const t=$("#v_tipo"); t.style.borderColor="var(--crit)"; t.focus();
-      t.addEventListener("change",()=>{t.style.borderColor="";},{once:true});
-      return msg("Escolha o tipo da venda: Loja física ou Online.");
-    }
+    // vendedor e tipo obrigatórios: começam em branco para ninguém esquecer de escolher
+    const exige=(id,texto)=>{ const t=$("#"+id); if(t.value) return false;
+      t.style.borderColor="var(--crit)"; t.focus(); t.addEventListener("change",()=>{t.style.borderColor="";},{once:true}); msg(texto); return true; };
+    if(exige("v_vend","Escolha o vendedor da venda.")) return;
+    if(exige("v_tipo","Escolha o tipo da venda: Loja física ou Online.")) return;
     const valor=+total().toFixed(2), tipo=$("#v_tipo").value, fr=frete();
     const pay=$("#v_pay").value, vend=$("#v_vend").value, pecas=cart.reduce((s,i)=>s+i.qtd,0), dsc=desc();
     // confirmação final antes de registrar (resumo da venda)
