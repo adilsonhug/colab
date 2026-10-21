@@ -1113,8 +1113,8 @@ function gerarEAN(){
   do{ n++; const b="200"+String(n).padStart(9,"0"); c=b+eanDV(b); }while(usados.has(c));
   return c;
 }
-// [largura, altura, etiquetas por fileira] em mm; a primeira é o padrão
-const ETQ_TAM={"35x65x3":[35,65,3],"40x25":[40,25,1],"50x30":[50,30,1],"33x22":[33,22,1]};
+// [largura, altura, etiquetas por fileira, layout] em mm; a primeira é o padrão. layout "alta": adesiva em pé, sem furo
+const ETQ_TAM={"35x65x3":[35,65,3],"40x25":[40,25,1],"50x30":[50,30,1],"33x22":[33,22,1],"30x40x2":[30,40,2,"alta"]};
 const etqNome=t=>{const [w,h,c]=ETQ_TAM[t]; return `${w} × ${h} mm${c>1?` — ${c} por fileira`:""}`;};
 const etqPref=()=>{ try{ return JSON.parse(localStorage.getItem("colab_etq")||"{}"); }catch(e){ return {}; } };
 const etqSalvaPref=o=>{ try{ localStorage.setItem("colab_etq",JSON.stringify(o)); }catch(e){} };
@@ -1129,8 +1129,9 @@ const carregaBarcode=()=>_barLib||(_barLib=new Promise((ok,erro)=>{
 // itens: [{p, n}] → n etiquetas de cada produto. Cada página = uma fileira do rolo (1 ou mais etiquetas lado a lado)
 async function imprimirEtiquetas(itens,tam,comPreco,gap=0,desl=0,vdesl=0){
   const JB=await carregaBarcode();
-  const [W,H,C=1]=ETQ_TAM[tam]||ETQ_TAM["40x25"], k=H/25;
-  const vert=H>W; // etiqueta em pé (ex.: 35 × 65): layout próprio
+  const [W,H,C=1,LAY]=ETQ_TAM[tam]||ETQ_TAM["40x25"], k=H/25;
+  const alta=LAY==="alta"; // adesiva em pé (ex.: 30 × 40): tudo empilhado e centralizado
+  const vert=H>W&&!alta; // etiqueta em pé (ex.: 35 × 65): layout próprio
   const PW=C*W+(C-1)*gap;
   // desl: anda com o conteúdo dentro de cada etiqueta (+ direita, − esquerda) sem sair da área impressa
   // etiqueta em pé: conteúdo com no máximo 30 mm de largura, centralizado → margem de segurança se a impressão desalinhar
@@ -1153,7 +1154,13 @@ async function imprimirEtiquetas(itens,tam,comPreco,gap=0,desl=0,vdesl=0){
     const larg=Math.min(BW,c.width*0.25);
     return `<img src="${c.toDataURL("image/png")}" alt="" style="width:${larg.toFixed(2)}mm"><div class="num">${esc(code)}</div>`;};
   const ct=p=>`${p.cor?esc(corCurta(p)):""}${p.cor&&p.tam?" · ":""}${p.tam?"Tam. "+esc(p.tam):""}`;
-  const um=({p})=>vert?`<div class="etq">
+  const um=({p})=>alta?`<div class="etq">
+      <div class="top"><b>COLAB</b></div>
+      <div class="nm">${esc(p.nome)}</div>
+      <div class="ct">${ct(p)}</div>
+      <div class="bc">${svgDe(p.ean)}</div>
+      ${comPreco?`<div class="pr">${brl(p.preco)}</div>`:""}</div>`
+    :vert?`<div class="etq">
       <div class="top"><b>COLAB.</b></div>
       <div class="sub">clothing</div>
       ${p.marca?`<div class="mc">${esc(String(p.marca).toUpperCase())}</div>`:""}
@@ -1170,7 +1177,15 @@ async function imprimirEtiquetas(itens,tam,comPreco,gap=0,desl=0,vdesl=0){
       <div class="bc">${svgDe(p.ean)}</div></div>`;
   const todas=itens.flatMap(it=>Array.from({length:it.n},()=>um(it)));
   const filas=[]; for(let i=0;i<todas.length;i+=C) filas.push(`<div class="fila">${todas.slice(i,i+C).join("")}</div>`);
-  const css=vert?`
+  const css=alta?`
+    .etq{padding:1.5mm ${pr}mm 1mm ${pl}mm;text-align:center}
+    .top{font-family:"Arial Black",Arial,sans-serif;font-size:9pt;font-weight:900;line-height:1}.top b{letter-spacing:.1em}
+    .nm{font-size:6.5pt;font-weight:700;line-height:1.15;margin-top:1mm;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;word-break:break-word}
+    .ct{font-size:6.5pt;font-weight:700;line-height:1.2;margin-top:.4mm;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .bc{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;margin-top:.8mm}
+    .bc svg{width:100%;height:100%;max-height:15mm}
+    .pr{font-family:"Arial Black",Arial,sans-serif;font-size:10pt;font-weight:900;line-height:1.05;margin-top:.6mm;white-space:nowrap}`
+   :vert?`
     /* tag 35 × 65: furo a ~8 mm do topo e picote a ~50 mm → conteúdo entre 11 mm e ~47 mm */
     /* térmica: letra fina sai apagada → tudo em negrito; COLAB e preço em Arial Black */
     .etq>*{max-width:100%;overflow:hidden}
