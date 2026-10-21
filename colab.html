@@ -1514,6 +1514,60 @@ let PDV={cart:[],ultima:null};
 // Só nele o preço é editado na venda e o estoque não bloqueia (ajusta depois).
 const COD_GENERICO="123456";
 const ehGenerico=p=>!!p&&(String(p.ean||"")===COD_GENERICO||String(p.sku||"")===COD_GENERICO);
+
+/* ---------------- PIX (QR Code estático, padrão BR Code do Banco Central) ----------------
+   >>> DADOS DA LOJA — iguais aos cadastrados no banco <<<
+   chave: CNPJ/CPF só números, e-mail, telefone no formato +5549999999999 ou chave aleatória */
+const PIX_LOJA={chave:"+5549988195396", nome:"Adilson Barbosa", cidade:"Chapeco"};
+const pixTxt=(s,max)=>String(s||"").normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/[^A-Za-z0-9 .\-]/g,"").toUpperCase().trim().slice(0,max);
+const pixCampo=(id,v)=>id+String(v.length).padStart(2,"0")+v;
+function pixCRC(s){ let c=0xFFFF; for(let i=0;i<s.length;i++){ c^=s.charCodeAt(i)<<8; for(let j=0;j<8;j++) c=(c&0x8000)?((c<<1)^0x1021):(c<<1); c&=0xFFFF; } return c.toString(16).toUpperCase().padStart(4,"0"); }
+// monta o "copia e cola" com o valor da venda; txid identifica a venda no extrato
+function pixPayload(valor,txid){
+  let chave=String(PIX_LOJA.chave||"").trim();
+  if(/^[\d.\-\/]+$/.test(chave)) chave=chave.replace(/\D/g,""); // CNPJ/CPF digitado com pontuação
+  const conta=pixCampo("00","br.gov.bcb.pix")+pixCampo("01",chave);
+  const tx=(String(txid||"").replace(/[^A-Za-z0-9]/g,"").slice(0,25))||"***";
+  let p=pixCampo("00","01")+pixCampo("26",conta)+pixCampo("52","0000")+pixCampo("53","986")
+    +pixCampo("54",(+valor).toFixed(2))+pixCampo("58","BR")+pixCampo("59",pixTxt(PIX_LOJA.nome,25)||"LOJA")
+    +pixCampo("60",pixTxt(PIX_LOJA.cidade,15)||"BRASIL")+pixCampo("62",pixCampo("05",tx))+"6304";
+  return p+pixCRC(p);
+}
+let _qrLib=null;
+const carregaQR=()=>_qrLib||(_qrLib=new Promise((ok,erro)=>{
+  if(window.qrcode) return ok(window.qrcode);
+  const s=document.createElement("script");
+  s.src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js";
+  s.onload=()=>ok(window.qrcode); s.onerror=()=>{_qrLib=null;erro(new Error("qrcode"));};
+  document.head.appendChild(s);
+}));
+// mostra o QR do Pix; onPago é chamado só quando o vendedor confirma que o Pix caiu
+async function modalPix(valor,txid,onPago){
+  if(!String(PIX_LOJA.chave||"").trim()){
+    modal(`<h3>Pix não configurado</h3><p style="margin:0;font-size:13px;color:var(--muted)">A chave Pix da loja ainda não foi cadastrada no sistema. Peça ao administrador para configurar.</p>
+      <div class="row"><button class="btn ghost" data-close>Voltar</button><button class="btn" id="px_semqr">Finalizar sem QR Code</button></div>`);
+    $("#px_semqr").addEventListener("click",()=>{closeModal();onPago();}); return;
+  }
+  const code=pixPayload(valor,txid);
+  modal(`<h3>Pagamento via Pix</h3>
+    <div style="display:flex;flex-direction:column;align-items:center;gap:10px">
+      <div style="font-size:13px;color:var(--muted)">Valor</div>
+      <div style="font-family:var(--font-display);font-weight:800;font-size:30px;line-height:1">${brl(valor)}</div>
+      <div id="px_qr" style="width:240px;height:240px;background:#fff;border-radius:12px;padding:10px;display:grid;place-items:center;border:1px solid var(--border)"><span class="hint">Gerando QR Code…</span></div>
+      <div class="hint" style="text-align:center">${esc(pixTxt(PIX_LOJA.nome,25))} · ${esc(PIX_LOJA.chave)}</div>
+      <div style="display:flex;gap:6px;width:100%"><input class="inp" id="px_code" readonly value="${esc(code)}" style="font-size:11px;flex:1">
+        <button class="btn ghost sm" id="px_copy" type="button">Copiar</button></div>
+      <div class="infobox" style="font-size:12.5px;width:100%;box-sizing:border-box;display:block;text-align:center">Confira no app do banco se o Pix de <b>${brl(valor)}</b> caiu antes de finalizar.</div>
+    </div>
+    <div class="row"><button class="btn ghost" data-close>Cancelar</button><button class="btn" id="px_ok">✓ Pix recebido — finalizar venda</button></div>`);
+  $("#px_copy").addEventListener("click",async()=>{ const x=$("#px_code"); x.select();
+    try{ await navigator.clipboard.writeText(code); }catch(e){ document.execCommand("copy"); } toast("Código Pix copiado."); });
+  $("#px_ok").addEventListener("click",()=>{closeModal();onPago();});
+  try{
+    const qr=(await carregaQR())(0,"M"); qr.addData(code); qr.make();
+    if($("#px_qr")) $("#px_qr").innerHTML=qr.createSvgTag({cellSize:5,margin:2,scalable:true}).replace("<svg ",'<svg style="width:100%;height:100%" ');
+  }catch(e){ if($("#px_qr")) $("#px_qr").innerHTML='<span class="hint" style="text-align:center">Sem internet para desenhar o QR. Use o “Copiar” e envie o código ao cliente.</span>'; }
+}
 function viewPDV(){
   const isAdmin=SESSION.role==="admin";
   const vendedores=USERS.filter(u=>u.ativo);
@@ -1676,6 +1730,14 @@ function viewPDV(){
     }
     const dataISO=$("#v_data").value; if(!dataISO) return msg("Informe a data da venda.");
     const valor=+total().toFixed(2), tipo=$("#v_tipo").value, fr=frete();
+    // Pix: mostra o QR Code com o valor; a venda só é registrada depois de confirmar que o Pix caiu
+    if($("#v_pay").value==="Pix"&&valor>0){
+      const txid="COLAB"+Date.now().toString(36).toUpperCase();
+      return modalPix(valor,txid,()=>registrarVenda(dataISO,valor,tipo,fr));
+    }
+    registrarVenda(dataISO,valor,tipo,fr);
+  });
+  function registrarVenda(dataISO,valor,tipo,fr){
     cart.forEach(i=>i.p.qtd-=i.qtd);
     const descr=cart.map(i=>`${i.qtd>1?i.qtd+" ":""}${i.p.nome} ${i.p.cor} ${i.p.tam}`).join(" + ");
     const hora=dataISO===hojeISO()?new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}):"";
@@ -1683,7 +1745,7 @@ function viewPDV(){
       itens:cart.map(i=>({sku:i.p.sku,qtd:i.qtd,preco:i.preco,cat:i.p.cat})),cats:[...new Set(cart.map(i=>i.p.cat))]};
     VENDAS.push(v); somaFaturamento(dataISO,valor,tipo,fr);
     PDV={cart:[],ultima:v}; viewPDV(); toast(`Venda de ${brl(valor)} registrada. Estoque baixado.`);
-  });
+  }
 }
 
 /* ---------------- CATEGORIAS (admin) ---------------- */
