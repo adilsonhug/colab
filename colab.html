@@ -115,6 +115,13 @@ main{min-width:0;padding:0 0 60px}
 .tile{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:15px 16px;box-shadow:var(--shadow);display:flex;flex-direction:column;gap:7px}
 .tile .lbl{font-size:11.5px;font-weight:600;color:var(--muted);letter-spacing:.03em;text-transform:uppercase;display:flex;align-items:center;gap:7px}
 .tile .val{font-family:var(--font-display);font-weight:800;font-size:25px;letter-spacing:-.02em}
+/* quadros compactos do Painel */
+.tiles.compact{grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.tiles.compact .tile{padding:10px 13px;gap:3px;box-shadow:none}
+.tiles.compact .tile .lbl{font-size:10.5px}
+.tiles.compact .tile .val{font-size:19px}
+.tiles.compact .tile .sub{font-size:11px}
+.tiles.compact .chip{font-size:10.5px;padding:2px 7px}
 .tile .sub{font-size:12px;color:var(--muted)}
 .dot{width:8px;height:8px;border-radius:50%;flex:none}
 .chip{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:700;padding:3px 9px;border-radius:999px}
@@ -584,17 +591,53 @@ function viewDash(){
   const diasAtivos=DIARIO.filter(v=>v>0).length;
   const VD=VENDAS.filter(v=>!v.imp), ticket=VD.reduce((s,v)=>s+v.valor,0)/Math.max(1,VD.length);
   const despMes=despesasMes(), saldo=MES.faturamento-despMes;
+  const isAdmin=SESSION.role==="admin";
+  const estoqueVenda=ESTOQUE.reduce((s,p)=>s+Math.max(0,p.qtd)*p.preco,0), pecasEst=ESTOQUE.reduce((s,p)=>s+Math.max(0,p.qtd),0);
+  // vendas do mês: por marca (a partir dos itens bipados) e por forma de pagamento
+  const VM=VENDAS.filter(v=>String(v.dataISO||"").startsWith(MES_ATUAL));
+  const marcaDe=sku=>{const p=ESTOQUE.find(x=>x.sku===sku); return (p&&String(p.marca||"").trim())||"Sem marca";};
+  const porMarca={}; let semItens=0;
+  VM.forEach(v=>{ if(!(v.itens||[]).length){ semItens+=v.valor; return; }
+    v.itens.forEach(it=>{const m=marcaDe(it.sku), o=porMarca[m]||(porMarca[m]={pecas:0,valor:0}); o.pecas+=it.qtd; o.valor+=it.qtd*it.preco;}); });
+  const marcas=Object.entries(porMarca).sort((a,b)=>b[1].valor-a[1].valor);
+  const totMarcas=marcas.reduce((s,[,o])=>s+o.valor,0);
+  const porPag={}; VM.forEach(v=>{const k=v.pay||"Não informado", o=porPag[k]||(porPag[k]={valor:0,n:0}); o.valor+=v.valor; o.n++;});
+  const pags=Object.entries(porPag).sort((a,b)=>(a[0]==="Não informado")-(b[0]==="Não informado")||b[1].valor-a[1].valor);
+  const totPag=pags.reduce((s,[,o])=>s+o.valor,0);
   $("#view").innerHTML=`
   <div class="section">
-    <div class="tiles">
+    <div class="tiles compact">
       <div class="tile"><div class="lbl"><span class="dot" style="background:var(--accent)"></span>Faturamento do mês</div>
         <div class="val tnum">${brl(MES.faturamento)}</div><div class="sub">${diasAtivos} dias com venda</div></div>
       <div class="tile"><div class="lbl"><span class="dot" style="background:var(--good)"></span>Saldo (fat. − despesas)</div>
-        <div class="val tnum">${brl(saldo)}</div><div class="sub">Despesas do mês: ${brl(despMes)}</div></div>
+        <div class="val tnum">${brl(saldo)}</div><div class="sub">Despesas: ${brl(despMes)}</div></div>
       <div class="tile"><div class="lbl"><span class="dot" style="background:#3257c5"></span>Ticket médio</div>
         <div class="val tnum">${brl(ticket)}</div><div class="sub">${VD.length} vendas detalhadas</div></div>
-      <div class="tile"><div class="lbl"><span class="dot" style="background:var(--warn)"></span>${SESSION.role==="admin"?"Valor em estoque (custo)":"Peças em estoque"}</div>
-        <div class="val tnum">${SESSION.role==="admin"?brl(totalEstoque):n0(ESTOQUE.reduce((s,p)=>s+p.qtd,0))}</div><div class="sub">${criticos>0?`<span class="chip crit">${criticos} item(ns) crítico(s)</span>`:'<span class="chip good">estoque ok</span>'}</div></div>
+      ${isAdmin?`<div class="tile"><div class="lbl"><span class="dot" style="background:var(--warn)"></span>Estoque (custo)</div>
+        <div class="val tnum">${brl(totalEstoque)}</div><div class="sub">${criticos>0?`<span class="chip crit">${criticos} item(ns) crítico(s)</span>`:'<span class="chip good">estoque ok</span>'}</div></div>`:""}
+      <div class="tile"><div class="lbl"><span class="dot" style="background:var(--info)"></span>Estoque (venda)</div>
+        <div class="val tnum">${brl(estoqueVenda)}</div><div class="sub">${n0(pecasEst)} peças${!isAdmin&&criticos>0?` · <span class="chip crit">${criticos} crítico(s)</span>`:""}</div></div>
+    </div>
+
+    <div class="grid2">
+      <div class="card">
+        <div class="card-h"><h3>Vendas por marca — mês</h3><span class="chip good">${brl(totMarcas)}</span></div>
+        <div class="card-b pad0">${marcas.length?`<div class="tw" style="max-height:300px;overflow:auto"><table style="min-width:0">
+          <thead><tr><th>Marca</th><th class="num">Peças</th><th class="num">Valor</th><th style="width:30%"></th></tr></thead>
+          <tbody>${marcas.map(([m,o])=>{const pct=totMarcas?Math.round(o.valor/totMarcas*100):0; return `<tr>
+            <td><b>${esc(m)}</b></td><td class="num tnum">${o.pecas}</td><td class="num tnum">${brl(o.valor)}</td>
+            <td><div style="display:flex;align-items:center;gap:6px"><div style="flex:1;height:7px;background:var(--surface-2);border-radius:999px;overflow:hidden"><div style="height:100%;width:${pct}%;background:var(--accent)"></div></div><span class="hint tnum" style="min-width:30px;text-align:right">${pct}%</span></div></td></tr>`;}).join("")}</tbody>
+          <tfoot><tr><td>Total</td><td class="num tnum">${marcas.reduce((s,[,o])=>s+o.pecas,0)}</td><td class="num tnum">${brl(totMarcas)}</td><td></td></tr></tfoot></table></div>`
+          :`<div class="infobox" style="margin:14px;text-align:center;color:var(--muted)">Nenhuma venda com produtos bipados neste mês.</div>`}
+          <div class="hint" style="padding:8px 14px 12px">Pelos produtos bipados na Nova venda (valor antes de desconto).${semItens?` Fechamentos sem itens detalhados (${brl(semItens)}) não entram aqui.`:""}</div></div>
+      </div>
+      <div class="card">
+        <div class="card-h"><h3>Por forma de pagamento — mês</h3><span class="chip good">${brl(totPag)}</span></div>
+        <div class="card-b" style="display:flex;flex-direction:column;gap:12px">
+          ${pags.length?pags.map(([k,o])=>splitRow(`${esc(k)} <span class="hint" style="font-weight:500">· ${o.n} venda(s)</span>`,o.valor,totPag,{"Pix":"#1f9d63","Dinheiro":"#c07c00","Cartão crédito":"#e0242b","Cartão débito":"#3257c5"}[k]||"#8a94a6")).join("")
+            :`<div class="infobox" style="text-align:center;color:var(--muted)">Nenhuma venda neste mês.</div>`}
+        </div>
+      </div>
     </div>
 
     <div class="grid2">
