@@ -488,7 +488,7 @@ function colChart({cats,series,h=170,labels=true}){
     t.textContent=b.dataset.tip; const r=b.getBoundingClientRect(); t.style.opacity=1;
     t.style.left=Math.min(innerWidth-t.offsetWidth-8,Math.max(8,r.left+r.width/2-t.offsetWidth/2))+"px"; t.style.top=(r.top-t.offsetHeight-8)+"px";});
 })();
-const payIcon=p=>({"Pix":"#1f9d63","Dinheiro":"#c07c00","Cartão crédito":"#e0242b","Cartão débito":"#3257c5"}[p]||"#6f6a60");
+const payIcon=p=>({"Pix":"#1f9d63","Dinheiro":"#c07c00","Cartão crédito":"#e0242b","Cartão débito":"#3257c5","Desconto em folha":"#7a4cc2"}[p]||"#6f6a60");
 
 function toast(msg){const t=$("#toast");t.textContent=msg;t.classList.add("show");clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove("show"),2200);}
 
@@ -526,13 +526,14 @@ const NAV=[
   {id:"importar",label:"Importar nota",icon:'<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M12 11v6M9 14l3 3 3-3"/>'},
   {id:"entradas",label:"Entradas",icon:'<path d="M12 3v12M8 11l4 4 4-4M4 21h16"/>'},
   {id:"despesas",label:"Despesas",icon:'<rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/>'},
+  {id:"folha",label:"Desconto em folha",admin:true,icon:'<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9h10M7 13h6M15 16l2 2 3-4"/>'},
   {id:"saidas",label:"Condicional / Ajuste",icon:'<path d="M16 3h5v5M21 3l-7 7M8 21H3v-5M3 21l7-7"/>'},
   {id:"comissao",label:"Comissão",icon:'<path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>'},
   {id:"conta",label:"Usuários",labelFunc:"Minha conta",icon:'<circle cx="9" cy="8" r="4"/><path d="M2 21v-2a4 4 0 0 1 4-4h6a4 4 0 0 1 4 4v2M19 8v6M16 11h6"/>'},
 ];
 let current="dash";
 function renderNav(){
-  $("#nav").innerHTML=NAV.map(i=>`<button class="nav-i ${i.id===current?'on':''}" data-nav="${i.id}">
+  $("#nav").innerHTML=NAV.filter(i=>!i.admin||(SESSION&&SESSION.role==="admin")).map(i=>`<button class="nav-i ${i.id===current?'on':''}" data-nav="${i.id}">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${i.icon}</svg>${SESSION&&SESSION.role!=="admin"&&i.labelFunc?i.labelFunc:i.label}</button>`).join("");
 }
 $("#nav").addEventListener("click",e=>{const b=e.target.closest("[data-nav]");if(!b)return;current=b.dataset.nav;renderNav();route();});
@@ -553,10 +554,11 @@ $("#theme").addEventListener("click",()=>{
 
 /* ---------------- VIEWS ---------------- */
 function route(){
-  const titles={dash:"Painel",pdv:"Nova venda",vendas:"Vendas & Caixa",estoque:"Estoque",entradas:"Relatório de entradas",importar:"Importar nota / cupom",inventario:"Inventário",despesas:"Despesas",fech:"Fechamento do mês",comissao:"Comissão",saidas:"Condicional e costureira",conta:SESSION.role==="admin"?"Painel de controle — usuários":"Minha conta"};
+  if(NAV.some(i=>i.id===current&&i.admin)&&SESSION.role!=="admin") current="dash"; // abas só do administrador
+  const titles={dash:"Painel",pdv:"Nova venda",vendas:"Vendas & Caixa",estoque:"Estoque",entradas:"Relatório de entradas",importar:"Importar nota / cupom",inventario:"Inventário",despesas:"Despesas",fech:"Fechamento do mês",comissao:"Comissão",saidas:"Condicional e costureira",folha:"Vendas para funcionários — desconto em folha",conta:SESSION.role==="admin"?"Painel de controle — usuários":"Minha conta"};
   $("#pageTitle").textContent=titles[current];
   $("#topExtra").innerHTML="";
-  ({dash:viewDash,pdv:viewPDV,importar:viewImportar,vendas:viewVendas,estoque:viewEstoque,entradas:viewEntradas,inventario:viewInventario,despesas:viewDespesas,fech:viewFech,comissao:viewComissao,saidas:viewSaidas,conta:viewConta}[current])();
+  ({dash:viewDash,pdv:viewPDV,importar:viewImportar,vendas:viewVendas,estoque:viewEstoque,entradas:viewEntradas,inventario:viewInventario,despesas:viewDespesas,fech:viewFech,comissao:viewComissao,saidas:viewSaidas,folha:viewFolha,conta:viewConta}[current])();
 }
 
 let DASH_ANO=MES_ATUAL.slice(0,4), DASH_DIA="g";
@@ -639,7 +641,7 @@ function viewDash(){
       <div class="card">
         <div class="card-h"><h3>Por forma de pagamento — mês</h3><span class="chip good">${brl(totPag)}</span></div>
         <div class="card-b" style="display:flex;flex-direction:column;gap:12px">
-          ${pags.length?pags.map(([k,o])=>splitRow(`${esc(k)} <span class="hint" style="font-weight:500">· ${o.n} venda(s)</span>`,o.valor,totPag,{"Pix":"#1f9d63","Dinheiro":"#c07c00","Cartão crédito":"#e0242b","Cartão débito":"#3257c5"}[k]||"#8a94a6")).join("")
+          ${pags.length?pags.map(([k,o])=>splitRow(`${esc(k)} <span class="hint" style="font-weight:500">· ${o.n} venda(s)</span>`,o.valor,totPag,k==="Não informado"?"#8a94a6":payIcon(k))).join("")
             :`<div class="infobox" style="text-align:center;color:var(--muted)">Nenhuma venda neste mês.</div>`}
         </div>
       </div>
@@ -697,7 +699,8 @@ function barChart(data){
 
 const novoVF=()=>({vend:"",tipo:"",pay:"",cat:"",q:"",d:novoDF()});
 let VF=novoVF();
-const PAGAMENTOS=["Pix","Dinheiro","Cartão crédito","Cartão débito"];
+const PAGAMENTOS=["Pix","Dinheiro","Cartão crédito","Cartão débito","Desconto em folha"];
+const PAG_FOLHA="Desconto em folha"; // venda para funcionário: descontada do salário, sempre com senha do administrador
 function viewVendas(){
   const vendedores=[...new Set([...USERS.map(u=>u.name),...VENDAS.map(v=>v.vend)])];
   const pays=[...new Set([...PAGAMENTOS,...VENDAS.map(v=>v.pay)])];
@@ -835,6 +838,7 @@ function viewEstoque(){
       <button class="btn ghost" id="estEtq" title="Etiquetas dos produtos marcados (ou, sem marcação, dos filtrados)">
         <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="vertical-align:-2px;margin-right:4px"><path d="M4 6v12M8 6v12M11 6v12M15 6v12M18 6v12M21 6v12"/></svg><span id="estEtqTxt">Etiquetas</span></button>
       <button class="btn ghost sm" id="estSelClear" hidden>Desmarcar todos</button>
+      <button class="btn ghost sm" id="estMarca" hidden title="Define a mesma marca para todos os produtos marcados">🏷 Definir marca</button>
       ${isAdmin?`<button class="btn ghost sm" id="estDel" hidden style="color:var(--crit)" title="Apaga o cadastro dos produtos marcados (pede a senha do administrador)">🗑 Excluir marcados</button>`:""}
       <button class="btn ghost" id="estPrint" title="Imprime a lista como está filtrada">
         <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px;margin-right:4px"><path d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>Imprimir</button>
@@ -903,12 +907,33 @@ function viewEstoque(){
     $("#estEtqTxt").textContent=n?`Etiquetas (${n} marcado${n>1?"s":""})`:"Etiquetas";
     $("#estSelClear").hidden=!n;
     if($("#estDel")){ $("#estDel").hidden=!n; $("#estDel").textContent=`🗑 Excluir marcados (${n})`; }
+    $("#estMarca").hidden=!n; $("#estMarca").textContent=`🏷 Definir marca (${n})`;
     all.checked=!!lista.length&&vis===lista.length; all.indeterminate=vis>0&&vis<lista.length;
   };
   $("#view").querySelectorAll("[data-sel]").forEach(c=>c.addEventListener("change",()=>{ c.checked?ESTQ_SEL.add(c.dataset.sel):ESTQ_SEL.delete(c.dataset.sel); selUI(); }));
   $("#estSelAll").addEventListener("change",e=>{
     lista.forEach(x=>e.target.checked?ESTQ_SEL.add(x.p.sku):ESTQ_SEL.delete(x.p.sku));
     $("#view").querySelectorAll("[data-sel]").forEach(c=>c.checked=e.target.checked); selUI();
+  });
+  // marca em massa: aplica a mesma marca a todos os produtos marcados (ex.: filtrar por fornecedor e marcar todos)
+  $("#estMarca").addEventListener("click",()=>{
+    const alvo=ESTOQUE.filter(p=>ESTQ_SEL.has(p.sku)); if(!alvo.length) return;
+    const forns=[...new Set(alvo.map(fornDe).filter(Boolean))], comMarca=alvo.filter(p=>String(p.marca||"").trim()).length;
+    modal(`<h3>🏷 Definir marca — ${alvo.length} produto(s)</h3>
+      <p style="margin:0;font-size:13px;color:var(--muted)">${forns.length===1?`Fornecedor: <b>${esc(forns[0])}</b>. `:""}A marca vale para todas as numerações e cores marcadas.</p>
+      <div class="field"><label>Marca</label><input class="inp" id="mm_marca" list="mm_marcas" placeholder="Ex.: Kawipii" autocomplete="off">
+        <datalist id="mm_marcas">${marcasCad().map(m=>`<option value="${esc(m)}">`).join("")}</datalist></div>
+      ${comMarca?`<label class="chk"><input type="checkbox" id="mm_subst"> Trocar também a marca dos ${comMarca} produto(s) que já têm marca</label>`:""}
+      <div class="err" id="mm_err"></div>
+      <div class="row"><button class="btn ghost" data-close>Cancelar</button><button class="btn" id="mm_ok">Aplicar marca</button></div>`);
+    setTimeout(()=>$("#mm_marca")?.focus(),30);
+    const aplicar=()=>{ const m=$("#mm_marca").value.trim(); if(!m) return $("#mm_err").textContent="Digite a marca.";
+      // usa a grafia já cadastrada, se existir (evita "kawipii" e "Kawipii" como marcas diferentes)
+      const marca=marcasCad().find(x=>x.toLowerCase()===m.toLowerCase())||m, subst=$("#mm_subst")?.checked;
+      let n=0; alvo.forEach(p=>{ if(!subst&&String(p.marca||"").trim()) return; p.marca=marca; n++; });
+      closeModal(); ESTQ_SEL.clear(); viewEstoque(); toast(`Marca ${marca} aplicada em ${n} produto(s).`); };
+    $("#mm_ok").addEventListener("click",aplicar);
+    $("#mm_marca").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();aplicar();}});
   });
   // excluir cadastro: só administrador, confirma a lista e ainda pede a senha do administrador
   $("#estDel")?.addEventListener("click",()=>{
@@ -1763,6 +1788,7 @@ function viewPDV(){
   $("#v_frete").addEventListener("input",draw);
   $("#v_clear").addEventListener("click",()=>{PDV.cart=[];PDV.ultima=null;viewPDV();});
   $("#v_ver")?.addEventListener("click",()=>{current="vendas";renderNav();route();});
+  if(PDV.pref&&PDV.pref.pay) $("#v_pay").value=PDV.pref.pay; // veio do retorno de funcionário: já em desconto em folha
   draw(); setTimeout(()=>$("#v_code")?.focus(),50);
 
   $("#v_save").addEventListener("click",()=>{
@@ -1798,9 +1824,16 @@ function viewPDV(){
         ${dsc||fr?`<div style="display:flex;justify-content:space-between"><span style="color:var(--muted)">Ajustes</span><b class="tnum">${dsc?"−"+brl(dsc):""}${dsc&&fr?" / ":""}${fr?"+"+brl(fr):""}</b></div>`:""}
       </div>
       <div class="total-bar"><span>Total · ${pecas} peça(s)</span><b class="tnum">${brl(valor)}</b></div>
-      <div class="row"><button class="btn ghost" data-close>Voltar</button><button class="btn" id="cf_ok">${pay==="Pix"?"Confirmar e gerar Pix":"Confirmar venda"}</button></div>`,"wide");
+      ${pay===PAG_FOLHA?`<div class="field"><label>Funcionário (desconto em folha) <span class="req">*</span></label><select class="inp" id="cf_func"><option value="">Selecione…</option>${USERS.filter(u=>u.ativo!==false).map(u=>`<option ${PDV.pref&&PDV.pref.func===u.name?"selected":""}>${esc(u.name)}</option>`).join("")}</select></div>`:""}
+      <div class="err" id="cf_err" style="min-height:0"></div>
+      <div class="row"><button class="btn ghost" data-close>Voltar</button><button class="btn" id="cf_ok">${pay==="Pix"?"Confirmar e gerar Pix":pay===PAG_FOLHA?"🔒 Confirmar (senha do administrador)":"Confirmar venda"}</button></div>`,"wide");
     setTimeout(()=>$("#cf_ok")?.focus(),30);
     $("#cf_ok").addEventListener("click",()=>{
+      // venda para funcionário: escolhe quem e sempre pede a senha do administrador
+      if(pay===PAG_FOLHA){
+        const func=$("#cf_func").value; if(!func) return $("#cf_err").textContent="Escolha o funcionário que vai ter o desconto em folha.";
+        return askAdminPw(()=>registrarVenda(dataISO,valor,tipo,fr,func),`Venda de ${brl(valor)} para ${esc(func)} com desconto em folha. Confirme com a senha do administrador.`);
+      }
       closeModal();
       // Pix: mostra o QR Code com o valor; a venda só é registrada depois de confirmar que o Pix caiu
       if(pay==="Pix"&&valor>0){
@@ -1810,15 +1843,80 @@ function viewPDV(){
       registrarVenda(dataISO,valor,tipo,fr);
     });
   });
-  function registrarVenda(dataISO,valor,tipo,fr){
+  function registrarVenda(dataISO,valor,tipo,fr,func){
     cart.forEach(i=>i.p.qtd-=i.qtd);
-    const descr=cart.map(i=>`${i.qtd>1?i.qtd+" ":""}${i.p.nome} ${i.p.cor} ${i.p.tam}`).join(" + ");
+    const descr=cart.map(i=>`${i.qtd>1?i.qtd+" ":""}${i.p.nome} ${i.p.cor} ${i.p.tam}`).join(" + ")+(func?` — funcionário: ${func} (desconto em folha)`:"");
     const hora=dataISO===hojeISO()?new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}):"";
     const v={id:VENDAS.length+1,desc:descr,valor,desconto:desc(),vend:$("#v_vend").value,pay:$("#v_pay").value,tipo,nova:true,dataISO,hora,
-      itens:cart.map(i=>({sku:i.p.sku,qtd:i.qtd,preco:i.preco,cat:i.p.cat})),cats:[...new Set(cart.map(i=>i.p.cat))]};
+      itens:cart.map(i=>({sku:i.p.sku,qtd:i.qtd,preco:i.preco,cat:i.p.cat})),cats:[...new Set(cart.map(i=>i.p.cat))],...(func?{func}:{})};
     VENDAS.push(v); somaFaturamento(dataISO,valor,tipo,fr);
     PDV={cart:[],ultima:v}; viewPDV(); toast(`Venda de ${brl(valor)} registrada. Estoque baixado.`);
   }
+}
+
+/* ---------------- DESCONTO EM FOLHA (vendas para funcionários) ----------------
+   A venda é feita na hora, pela Nova venda (pagamento "Desconto em folha" + senha do administrador).
+   Aqui o administrador vê, no dia do pagamento, quanto descontar de cada funcionário e marca como descontado. */
+let FOF={sit:"pendente",mes:"",func:""};
+function viewFolha(){
+  if(SESSION.role!=="admin"){ current="dash"; return route(); }
+  const todas=VENDAS.filter(v=>v.pay===PAG_FOLHA);
+  const funcDe=v=>v.func||"Não informado";
+  const meses=[...new Set(todas.map(v=>String(v.dataISO||"").slice(0,7)).filter(Boolean))].sort().reverse();
+  const funcs=[...new Set(todas.map(funcDe))].sort((a,b)=>a.localeCompare(b,"pt-BR"));
+  const lista=todas.filter(v=>(FOF.sit==="todas"||(FOF.sit==="pendente"?!v.descontado:!!v.descontado))
+    &&(!FOF.mes||String(v.dataISO||"").startsWith(FOF.mes))&&(!FOF.func||funcDe(v)===FOF.func))
+    .sort((a,b)=>funcDe(a).localeCompare(funcDe(b),"pt-BR")||String(a.dataISO).localeCompare(String(b.dataISO)));
+  const grupos={}; lista.forEach(v=>{(grupos[funcDe(v)]=grupos[funcDe(v)]||[]).push(v);});
+  const pend=todas.filter(v=>!v.descontado), totPend=pend.reduce((s,v)=>s+v.valor,0);
+  const mesLbl=ym=>`${MESES_L[+ym.slice(5,7)-1]}/${ym.slice(0,4)}`;
+  $("#view").innerHTML=`
+  <div class="section">
+    <div class="tiles compact" style="margin-bottom:14px">
+      <div class="tile"><div class="lbl"><span class="dot" style="background:#7a4cc2"></span>A descontar (total)</div><div class="val tnum">${brl(totPend)}</div><div class="sub">${pend.length} venda(s) · ${new Set(pend.map(funcDe)).size} funcionário(s)</div></div>
+      <div class="tile"><div class="lbl"><span class="dot" style="background:var(--good)"></span>Já descontado</div><div class="val tnum">${brl(todas.filter(v=>v.descontado).reduce((s,v)=>s+v.valor,0))}</div><div class="sub">${todas.filter(v=>v.descontado).length} venda(s)</div></div>
+    </div>
+    <div class="toolbar" style="align-items:flex-end;flex-wrap:wrap">
+      <div class="sizes" id="fo_sit">${[["pendente","A descontar"],["descontado","Descontadas"],["todas","Todas"]].map(([k,l])=>`<button type="button" data-s="${k}" class="${FOF.sit===k?"on":""}">${l}</button>`).join("")}</div>
+      <div class="field" style="min-width:140px"><label>Mês da compra</label>${optSel("fo_mes",meses.map(m=>[m,mesLbl(m)]),FOF.mes,"Todos")}</div>
+      <div class="field" style="min-width:150px"><label>Funcionário</label>${optSel("fo_func",funcs,FOF.func,"Todos")}</div>
+      <button class="btn ghost" id="fo_print" style="margin-left:auto">${ICO_PRINT}Imprimir</button>
+    </div>
+    ${Object.keys(grupos).length?Object.entries(grupos).map(([f,vs])=>{
+      const tot=vs.reduce((s,v)=>s+v.valor,0), pendF=vs.filter(v=>!v.descontado);
+      return `<div class="card" style="margin-bottom:14px">
+        <div class="card-h"><h3>${esc(f)}</h3><span class="chip" style="color:#7a4cc2;background:#7a4cc222">${brl(tot)}</span>
+          <span class="hint">${vs.length} compra(s)</span>
+          ${pendF.length?`<button class="btn sm" style="margin-left:auto" data-desc="${esc(f)}">✓ Marcar como descontado (${brl(pendF.reduce((s,v)=>s+v.valor,0))})</button>`:""}</div>
+        <div class="card-b pad0"><div class="tw"><table style="min-width:0">
+          <thead><tr><th>Data</th><th>Peças</th><th>Lançada por</th><th class="num">Valor</th><th>Situação</th></tr></thead>
+          <tbody>${vs.map(v=>`<tr><td class="tnum">${v.dataISO?fmtDate(v.dataISO):"—"}${v.hora?`<div class="hint">${esc(v.hora)}</div>`:""}</td>
+            <td>${esc(String(v.desc||"").replace(/ — funcionário: .*$/,""))}</td><td>${esc(v.vend||"—")}</td>
+            <td class="num tnum"><b>${brl(v.valor)}</b></td>
+            <td>${v.descontado?`<span class="chip good">Descontado</span><div class="hint">${esc(v.descontado)}</div>`:`<span class="chip warn">A descontar</span>`}</td></tr>`).join("")}</tbody>
+        </table></div></div></div>`;}).join("")
+    :`<div class="card"><div class="card-b"><div class="infobox" style="text-align:center;color:var(--muted)">${todas.length?"Nenhuma venda com esses filtros.":"Nenhuma venda para funcionário ainda. Elas são feitas na Nova venda com o pagamento “Desconto em folha”."}</div></div></div>`}
+  </div>`;
+  $("#fo_sit").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;FOF.sit=b.dataset.s;viewFolha();});
+  $("#fo_mes").addEventListener("change",e=>{FOF.mes=e.target.value;viewFolha();});
+  $("#fo_func").addEventListener("change",e=>{FOF.func=e.target.value;viewFolha();});
+  $("#view").querySelectorAll("[data-desc]").forEach(b=>b.addEventListener("click",()=>{
+    const f=b.dataset.desc, alvo=lista.filter(v=>funcDe(v)===f&&!v.descontado), tot=alvo.reduce((s,v)=>s+v.valor,0);
+    askAdminPw(()=>{ const q=`${agoraStr()} · ${SESSION.name}`; alvo.forEach(v=>{v.descontado=q;}); viewFolha();
+      toast(`${f}: ${brl(tot)} marcado como descontado.`); },
+      `Marcar ${alvo.length} compra(s) de ${esc(f)} (${brl(tot)}) como descontadas do salário. Confirme com a senha do administrador.`);
+  }));
+  $("#fo_print").addEventListener("click",()=>{
+    if(!lista.length) return toast("Nada para imprimir com esses filtros.");
+    const filtros=[FOF.sit==="pendente"?"a descontar":FOF.sit==="descontado"?"descontadas":"todas",FOF.mes&&mesLbl(FOF.mes),FOF.func].filter(Boolean).join(" · ");
+    imprimirRelatorio("Desconto em folha — vendas para funcionários",`
+      <div class="meta">Emitido em ${agoraStr()} por ${esc(SESSION.name)} · ${esc(filtros)}</div>
+      ${Object.entries(grupos).map(([f,vs])=>`<h3 style="margin:14px 0 4px;font-size:13px">${esc(f)} — ${brl(vs.reduce((s,v)=>s+v.valor,0))}</h3>
+        <table><thead><tr><th>Data</th><th>Peças</th><th class="n">Valor</th><th>Situação</th></tr></thead>
+        <tbody>${vs.map(v=>`<tr><td>${v.dataISO?fmtDate(v.dataISO):"—"}</td><td>${esc(String(v.desc||"").replace(/ — funcionário: .*$/,""))}</td><td class="n">${brl(v.valor)}</td><td>${v.descontado?"Descontado":"A descontar"}</td></tr>`).join("")}</tbody>
+        <tfoot><tr><td colspan="2">Total ${esc(f)}</td><td class="n">${brl(vs.reduce((s,v)=>s+v.valor,0))}</td><td></td></tr></tfoot></table>
+        <div class="ass"><div>${esc(f)}</div><div>Administrador</div></div>`).join("")}`,"portrait");
+  });
 }
 
 /* ---------------- CONDICIONAL / COSTUREIRA ---------------- */
@@ -1837,8 +1935,7 @@ function viewSaidas(){
     <div class="tiles compact" style="margin-bottom:14px">
       <div class="tile"><div class="lbl">Peças fora da loja</div><div class="val tnum">${fora()}</div></div>
       <div class="tile"><div class="lbl"><span class="dot" style="background:#3257c5"></span>Em condicional</div><div class="val tnum">${fora("Condicional")}</div><div class="sub">${abertas.filter(s=>s.tipo==="Condicional").length} cliente(s)</div></div>
-      <div class="tile"><div class="lbl"><span class="dot" style="background:var(--warn)"></span>Na costureira</div><div class="val tnum">${fora("Costureira")}</div><div class="sub">${abertas.filter(s=>s.tipo==="Costureira").length} saída(s)</div></div>
-      <div class="tile"><div class="lbl"><span class="dot" style="background:var(--crit)"></span>Atrasadas</div><div class="val tnum" style="${abertas.some(saiAtrasada)?"color:var(--crit)":""}">${abertas.filter(saiAtrasada).length}</div><div class="sub">passaram da previsão</div></div>
+      <div class="tile"><div class="lbl"><span class="dot" style="background:var(--warn)"></span>Na costureira</div><div class="val tnum">${fora("Costureira")}</div><div class="sub">${abertas.filter(s=>s.tipo==="Costureira").length} saída(s)</div></div>      <div class="tile"><div class="lbl"><span class="dot" style="background:var(--crit)"></span>Atrasadas</div><div class="val tnum" style="${abertas.some(saiAtrasada)?"color:var(--crit)":""}">${abertas.filter(saiAtrasada).length}</div><div class="sub">passaram da previsão</div></div>
     </div>
     <div class="toolbar">
       <button class="btn" id="sai_nova">+ Nova saída</button>
@@ -1850,7 +1947,7 @@ function viewSaidas(){
         const ab=saiAberta(s), atr=saiAtrasada(s), resto=s.itens.reduce((n,it)=>n+saiResto(it),0), tot=s.itens.reduce((n,it)=>n+it.qtd,0);
         const vend=s.itens.reduce((n,it)=>n+(it.vend||0),0);
         return `<tr${atr?' style="background:var(--crit-soft)"':""}>
-          <td><span class="chip ${s.tipo==="Condicional"?"info":"warn"}">${s.tipo==="Condicional"?"Condicional":"Costureira"}</span></td>
+          <td>${s.tipo==="Funcionário"?`<span class="chip" style="color:#7a4cc2;background:#7a4cc222">Funcionário</span>`:`<span class="chip ${s.tipo==="Condicional"?"info":"warn"}">${s.tipo==="Condicional"?"Condicional":"Costureira"}</span>`}</td>
           <td><b>${esc(s.pessoa)}</b>${s.contato?`<div class="hint">${esc(s.contato)}</div>`:""}${s.obs?`<div class="hint">${esc(s.obs)}</div>`:""}</td>
           <td class="tnum">${fmtDate(s.data)}<div class="hint">${esc(s.user||"")}</div></td>
           <td class="tnum">${s.prev?fmtDate(s.prev):"—"}${ab&&s.prev?`<div class="hint" style="${atr?"color:var(--crit);font-weight:700":""}">${atr?`atrasada ${diasEntre(s.prev,hoje)} dia(s)`:s.prev===hoje?"vence hoje":`faltam ${diasEntre(hoje,s.prev)} dia(s)`}</div>`:""}</td>
@@ -1918,9 +2015,10 @@ function modalNovaSaida(){
 }
 function modalRetornoSaida(s){
   if(!s) return;
-  const cond=s.tipo==="Condicional", pend=s.itens.map((it,k)=>({it,k,resto:saiResto(it)})).filter(x=>x.resto>0);
+  // condicional e funcionário podem comprar; costureira só devolve
+  const func=s.tipo==="Funcionário", cond=s.tipo==="Condicional"||func, pend=s.itens.map((it,k)=>({it,k,resto:saiResto(it)})).filter(x=>x.resto>0);
   modal(`<h3>Retorno — ${esc(s.pessoa)}</h3>
-    <p style="margin:0;font-size:13px;color:var(--muted)">${cond?"Condicional":"Costureira"} desde ${fmtDate(s.data)}. Informe o que ${cond?"voltou e o que o cliente comprou":"voltou da costureira"}.${cond?" O que for comprado vai para a Nova venda.":""}</p>
+    <p style="margin:0;font-size:13px;color:var(--muted)">${s.tipo} desde ${fmtDate(s.data)}. Informe o que ${func?"voltou e o que o funcionário comprou":cond?"voltou e o que o cliente comprou":"voltou da costureira"}.${func?" A compra vai para a Nova venda como <b>desconto em folha</b> e precisa da senha do administrador.":cond?" O que for comprado vai para a Nova venda.":""}</p>
     <div class="tw" style="border:1px solid var(--border);border-radius:10px"><table style="min-width:0">
       <thead><tr><th>Peça</th><th class="num">Fora</th><th class="num">Voltou</th>${cond?'<th class="num">Comprou</th>':""}</tr></thead>
       <tbody>${pend.map(x=>`<tr><td><b>${esc(x.it.nome)}</b><div class="hint">${esc(x.it.cor||"")} · Tam. ${esc(x.it.tam||"—")}</div></td>
@@ -1937,6 +2035,10 @@ function modalRetornoSaida(s){
     const mov=pend.map(x=>({...x,v:val("rv",x.k),c:cond?val("rc",x.k):0}));
     const exc=mov.find(m=>m.v+m.c>m.resto); if(exc) return $("#rt_err").textContent=`${exc.it.nome}: voltou + comprou passa das ${exc.resto} peça(s) fora.`;
     if(!mov.some(m=>m.v||m.c)) return $("#rt_err").textContent="Informe pelo menos uma peça que voltou ou foi comprada.";
+    if(func&&mov.some(m=>m.c)) return askAdminPw(()=>aplicar(mov),`Venda para funcionário (${esc(s.pessoa)}) com desconto em folha. Confirme com a senha do administrador.`);
+    aplicar(mov);
+  });
+  function aplicar(mov){
     const vendidas=[];
     mov.forEach(m=>{ const n=m.v+m.c; if(!n) return;
       m.it.ret=(m.it.ret||0)+m.v; m.it.vend=(m.it.vend||0)+m.c;
@@ -1947,10 +2049,11 @@ function modalRetornoSaida(s){
     closeModal();
     if(vendidas.length){
       vendidas.forEach(({p,qtd})=>{const it=PDV.cart.find(i=>i.p===p); it?it.qtd+=qtd:PDV.cart.push({p,qtd,preco:p.preco});});
-      PDV.ultima=null; current="pdv"; renderNav(); route();
+      PDV.ultima=null; if(func) PDV.pref={pay:PAG_FOLHA,func:s.pessoa}; // já abre com desconto em folha e o funcionário
+      current="pdv"; renderNav(); route();
       toast(`Peças compradas por ${s.pessoa} foram para a Nova venda. Finalize a venda.`);
     } else { viewSaidas(); toast(`Retorno registrado (${s.pessoa}).`); }
-  });
+  }
 }
 
 /* ---------------- CATEGORIAS (admin) ---------------- */
