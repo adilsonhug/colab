@@ -837,7 +837,7 @@ function viewEstoque(){
         <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="vertical-align:-2px;margin-right:4px"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>Consultar numeração</button>
       <button class="btn ghost" id="estEtq" title="Etiquetas dos produtos marcados (ou, sem marcação, dos filtrados)">
         <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="vertical-align:-2px;margin-right:4px"><path d="M4 6v12M8 6v12M11 6v12M15 6v12M18 6v12M21 6v12"/></svg><span id="estEtqTxt">Etiquetas</span></button>
-      <button class="btn ghost sm" id="estSelClear" hidden>Desmarcar todos</button>
+      <button class="btn ghost sm" id="estSelClear" ${ativo?"":"hidden"} title="Desmarca a seleção e limpa pesquisa e filtros" style="color:var(--crit)">✕ Limpar tudo</button>
       <button class="btn ghost sm" id="estMarca" hidden title="Define a mesma marca para todos os produtos marcados">🏷 Definir marca</button>
       ${isAdmin?`<button class="btn ghost sm" id="estDel" hidden style="color:var(--crit)" title="Apaga o cadastro dos produtos marcados (pede a senha do administrador)">🗑 Excluir marcados</button>`:""}
       <button class="btn ghost" id="estPrint" title="Imprime a lista como está filtrada">
@@ -905,7 +905,7 @@ function viewEstoque(){
   const selUI=()=>{
     const n=ESTQ_SEL.size, vis=lista.filter(x=>ESTQ_SEL.has(x.p.sku)).length, all=$("#estSelAll");
     $("#estEtqTxt").textContent=n?`Etiquetas (${n} marcado${n>1?"s":""})`:"Etiquetas";
-    $("#estSelClear").hidden=!n;
+    $("#estSelClear").hidden=!n&&!ativo;
     if($("#estDel")){ $("#estDel").hidden=!n; $("#estDel").textContent=`🗑 Excluir marcados (${n})`; }
     $("#estMarca").hidden=!n; $("#estMarca").textContent=`🏷 Definir marca (${n})`;
     all.checked=!!lista.length&&vis===lista.length; all.indeterminate=vis>0&&vis<lista.length;
@@ -959,7 +959,7 @@ function viewEstoque(){
       toast(`${alvo.length} produto(s) excluído(s) do estoque.`);
     },`Confirme a exclusão de ${alvo.length} produto(s) com a senha do administrador.`));
   });
-  $("#estSelClear").addEventListener("click",()=>{ ESTQ_SEL.clear(); $("#view").querySelectorAll("[data-sel]").forEach(c=>c.checked=false); selUI(); });
+  $("#estSelClear").addEventListener("click",()=>{ ESTQ_SEL.clear(); EF=novoEF(); ESTQ_HL=null; viewEstoque(); });
   selUI();
   $("#estEtq").addEventListener("click",()=>{
     if(ESTQ_SEL.size){
