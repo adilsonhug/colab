@@ -1,0 +1,17 @@
+# Acessa o banco do Supabase todo dia para o plano grátis não pausar o projeto por inatividade.
+name: Manter banco ativo
+on:
+  schedule:
+    - cron: "0 12 * * *"   # todo dia, 09:00 de Brasília
+  workflow_dispatch:        # permite rodar na mão em Actions → Run workflow
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Consulta o banco
+        env:
+          SUPABASE_URL: https://xdomtxsohbxdicuxyjfy.supabase.co
+          # mesma chave pública (anon) que já está no colab.html
+          SUPABASE_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inhkb210eHNvaGJ4ZGljdXh5amZ5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTIxODEyMDYsImV4cCI6MjEwNzc1NzIwNn0.Ut18MmTkt_H3u6fjxc1M0-wfNCgmN3rCaI1xNNGwSbQ
+        run: |
+          curl -fsS --retry 3 --retry-delay 30 "$SUPABASE_URL/rest/v1/estado?select=key&limit=1"             -H "apikey: $SUPABASE_KEY" -H "Authorization: Bearer $SUPABASE_KEY"
