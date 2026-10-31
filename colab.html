@@ -1114,7 +1114,7 @@ function gerarEAN(){
   return c;
 }
 // [largura, altura, etiquetas por fileira] em mm; a primeira é o padrão
-const ETQ_TAM={"35x65x3":[35,65,3],"40x25":[40,25,1],"50x30":[50,30,1],"33x22":[33,22,1]};
+const ETQ_TAM={"35x65x3":[35,65,3],"100x75":[100,75,1],"40x25":[40,25,1],"50x30":[50,30,1],"33x22":[33,22,1]};
 const etqNome=t=>{const [w,h,c]=ETQ_TAM[t]; return `${w} × ${h} mm${c>1?` — ${c} por fileira`:""}`;};
 const etqPref=()=>{ try{ return JSON.parse(localStorage.getItem("colab_etq")||"{}"); }catch(e){ return {}; } };
 const etqSalvaPref=o=>{ try{ localStorage.setItem("colab_etq",JSON.stringify(o)); }catch(e){} };
@@ -1131,6 +1131,7 @@ async function imprimirEtiquetas(itens,tam,comPreco,gap=0,desl=0,vdesl=0){
   const JB=await carregaBarcode();
   const [W,H,C=1]=ETQ_TAM[tam]||ETQ_TAM["40x25"], k=H/25;
   const vert=H>W; // etiqueta em pé (ex.: 35 × 65): layout próprio
+  const grande=!vert&&W>=80; // etiqueta grande (ex.: 100 × 75): layout em duas colunas
   const PW=C*W+(C-1)*gap;
   // desl: anda com o conteúdo dentro de cada etiqueta (+ direita, − esquerda) sem sair da área impressa
   // etiqueta em pé: conteúdo com no máximo 30 mm de largura, centralizado → margem de segurança se a impressão desalinhar
@@ -1138,9 +1139,10 @@ async function imprimirEtiquetas(itens,tam,comPreco,gap=0,desl=0,vdesl=0){
   const pl=Math.max(0,mrg+desl), pr=Math.max(0,mrg-desl), BW=Math.max(20,W-pl-pr);
   // altura da página MENOR que a etiqueta: se for maior, a térmica passa do fim e pula uma etiqueta.
   // Com sensor de gap, ela avança sozinha até o começo da próxima. Na Elgin da loja a impressão começa ~8 mm abaixo do topo.
-  const PH=vert?H-13:H;
+  const PH=vert?H-13:grande?H-3:H;
   // vdesl: sobe (−) ou desce (+) o conteúdo; com o padrão (−8) o COLAB. fica colado no topo da área impressa
   const pt=Math.max(0,8+vdesl);
+  const gpt=Math.max(0,4+vdesl), gpl=Math.max(0,4+desl), gpr=Math.max(0,4-desl); // margens da etiqueta grande
   const svgDe=code=>{const s=document.createElementNS("http://www.w3.org/2000/svg","svg");
     JB(s,code,{format:eanValido(code)?"EAN13":"CODE128",width:2,height:50,margin:0,fontSize:16,textMargin:1,displayValue:true,flat:true});
     // viewBox faz o código escalar para o tamanho da etiqueta sem cortar
@@ -1148,9 +1150,10 @@ async function imprimirEtiquetas(itens,tam,comPreco,gap=0,desl=0,vdesl=0){
     ["style","width","height"].forEach(a=>s.removeAttribute(a)); return s.outerHTML;};
   // etiqueta em pé: barras como imagem de tamanho fixo (não estica nem quebra de página) e números em texto embaixo
   // cada módulo (barra mais fina) = 0,25 mm = 2 pontos da térmica de 203 dpi → barras nítidas; EAN-13 fica com ~24 mm
-  const imgDe=code=>{const c=document.createElement("canvas");
+  // mod = largura da barra mais fina (0,25 mm = 2 pontos; 0,375 mm = 3 pontos, para a etiqueta grande)
+  const imgDe=(code,mod=0.25,maxW=BW)=>{const c=document.createElement("canvas");
     JB(c,code,{format:eanValido(code)?"EAN13":"CODE128",width:1,height:60,margin:0,displayValue:false,flat:true});
-    const larg=Math.min(BW,c.width*0.25);
+    const larg=Math.min(maxW,c.width*mod);
     return `<img src="${c.toDataURL("image/png")}" alt="" style="width:${larg.toFixed(2)}mm"><div class="num">${esc(code)}</div>`;};
   const ct=p=>`${p.cor?esc(corCurta(p)):""}${p.cor&&p.tam?" · ":""}${p.tam?"Tam. "+esc(p.tam):""}`;
   const um=({p})=>vert?`<div class="etq">
@@ -1163,6 +1166,20 @@ async function imprimirEtiquetas(itens,tam,comPreco,gap=0,desl=0,vdesl=0){
       ${p.sku?`<div class="cd">Cód. ${esc(p.sku)}</div>`:""}
       <div class="bc">${imgDe(p.ean)}</div>
       ${comPreco?`<div class="pr${brl(p.preco).length>9?" longo":""}">${brl(p.preco)}</div>`:""}
+      <div class="vs">“Vista a sua melhor versão.”</div></div>`
+    :grande?`<div class="etq">
+      <div class="g-top"><div><div class="top"><b>COLAB.</b></div><div class="sub">clothing</div></div>
+        ${comPreco?`<div class="pr">${brl(p.preco)}</div>`:""}</div>
+      <div class="g-meio">
+        <div class="g-txt">
+          ${p.marca?`<div class="mc">${esc(String(p.marca).toUpperCase())}</div>`:""}
+          <div class="nm">${esc(p.nome)}</div>
+          ${p.cor?`<div class="ct">${esc(corCurta(p))}</div>`:""}
+          ${p.tam?`<div class="tm">Tam. ${esc(p.tam)}</div>`:""}
+          ${p.sku?`<div class="cd">Cód. ${esc(p.sku)}</div>`:""}
+        </div>
+        <div class="bc">${imgDe(p.ean,0.375,40)}</div>
+      </div>
       <div class="vs">“Vista a sua melhor versão.”</div></div>`
     :`<div class="etq">
       <div class="top"><b>COLAB</b>${comPreco?`<b class="pr">${brl(p.preco)}</b>`:""}</div>
@@ -1191,6 +1208,24 @@ async function imprimirEtiquetas(itens,tam,comPreco,gap=0,desl=0,vdesl=0){
     .pr.longo{font-size:9pt}
     .vs{font-size:5.6pt;font-weight:700;font-style:italic;line-height:1.1;margin-top:.8mm;white-space:nowrap}
     .vs small{display:block;font-size:5.3pt;font-style:normal;font-weight:700;margin-top:0}`
+   :grande?`
+    /* etiqueta grande 100 × 75: topo (marca da loja + preço), meio em 2 colunas (texto | código de barras), frase embaixo */
+    .etq{padding:${gpt}mm ${gpr}mm 0 ${gpl}mm;font-weight:700;-webkit-font-smoothing:none;text-rendering:geometricPrecision}
+    .g-top{display:flex;justify-content:space-between;align-items:center;padding-bottom:2mm;border-bottom:.6mm solid #000}
+    .top{font-family:"Arial Black",Arial,sans-serif;font-weight:900;font-size:20pt;line-height:1}.top b{font-weight:900;letter-spacing:.08em}
+    .sub{font-size:9pt;font-weight:700;letter-spacing:.3em;line-height:1.1;margin-top:.5mm;padding-left:.3em}
+    .pr{font-family:"Arial Black",Arial,sans-serif;font-weight:900;font-size:24pt;line-height:1;white-space:nowrap}
+    .g-meio{display:flex;gap:4mm;align-items:center;margin-top:3mm}
+    .g-txt{flex:1;min-width:0}
+    .mc{font-size:11pt;font-weight:900;letter-spacing:.08em;line-height:1.1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .nm{font-size:12pt;font-weight:700;line-height:1.15;margin-top:1mm;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;word-break:break-word}
+    .ct{font-size:10.5pt;font-weight:700;line-height:1.2;margin-top:1mm;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .tm{font-size:18pt;font-weight:900;line-height:1.1;margin-top:1mm}
+    .cd{font-size:9pt;font-weight:700;line-height:1.1;margin-top:1mm;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .bc{flex:none;text-align:center}
+    .bc img{display:block;margin:0 auto;height:16mm;image-rendering:pixelated}
+    .bc .num{font-family:Arial,Helvetica,sans-serif;font-weight:700;font-size:10pt;letter-spacing:.1em;margin-top:.8mm}
+    .vs{font-size:9pt;font-weight:700;font-style:italic;text-align:center;margin-top:3mm;white-space:nowrap}`
    :`
     .etq{padding:${1.2*k}mm ${1.6*k}mm ${0.8*k}mm}
     .top{display:flex;justify-content:space-between;align-items:baseline;font-size:${7.5*k}pt;line-height:1.1}
@@ -1205,11 +1240,11 @@ async function imprimirEtiquetas(itens,tam,comPreco,gap=0,desl=0,vdesl=0){
     body{font-family:Arial,Helvetica,sans-serif;color:#000}
     /* fileira 2 mm menor que a etiqueta: se passar da altura, o navegador cria página extra e a impressora pula etiqueta */
     /* em pé: a fileira tem só a altura do conteúdo, para caber mesmo se o Chrome/driver colocar margem no topo */
-    .fila{width:${PW}mm;height:${vert?"auto":(PH-2)+"mm"};display:flex;align-items:flex-start;overflow:hidden;page-break-after:always;break-after:page;page-break-inside:avoid;break-inside:avoid}
+    .fila{width:${PW}mm;height:${vert||grande?"auto":(PH-2)+"mm"};display:flex;align-items:flex-start;overflow:hidden;page-break-after:always;break-after:page;page-break-inside:avoid;break-inside:avoid}
     /* distância entre colunas por margem (aceita negativo: aproxima as colunas quando o passo do rolo é menor que a etiqueta) */
     .fila>.etq+.etq{margin-left:${gap}mm}
     .fila:last-child{page-break-after:auto;break-after:auto}
-    .etq{width:${W}mm;height:${vert?"auto":(PH-2)+"mm"};flex:none;box-sizing:border-box;display:flex;flex-direction:column;overflow:hidden}
+    .etq{width:${W}mm;height:${vert||grande?"auto":(PH-2)+"mm"};flex:none;box-sizing:border-box;display:flex;flex-direction:column;overflow:hidden}
     ${css}
   </style></head><body>${filas.join("")}</body></html>`;
   const fr=document.createElement("iframe");
@@ -1221,18 +1256,23 @@ async function imprimirEtiquetas(itens,tam,comPreco,gap=0,desl=0,vdesl=0){
 function modalEtiquetas(itens,titulo="Imprimir etiquetas",sub=""){
   // v4: tag 35 × 65 da loja, 3 por fileira. No rolo o passo real entre colunas é ~33,5 mm → espaço −1,5 mm.
   // Na Elgin da loja a impressão começa ~8 mm abaixo do topo → ajuste vertical padrão −8. Preferências antigas não valem mais.
-  const pref=etqPref(), ok=pref.v===4; let tam=ok&&ETQ_TAM[pref.tam]?pref.tam:Object.keys(ETQ_TAM)[0];
-  let gap=ok&&pref.gap!=null?pref.gap:-1.5;
-  let desl=ok&&pref.desl!=null?pref.desl:0;
-  let vdesl=ok&&pref.vdesl!=null?pref.vdesl:-8;
+  // v5: cada tamanho de etiqueta guarda os próprios ajustes (a calibração de uma não mexe na outra)
+  const pref=etqPref();
+  const AJ_PADRAO={"35x65x3":{gap:-1.5,desl:0,vdesl:-8}};
+  const aj=pref.v===5&&pref.aj?pref.aj:{};
+  if(pref.v===4) aj["35x65x3"]={gap:pref.gap??-1.5,desl:pref.desl??0,vdesl:pref.vdesl??-8}; // aproveita a calibração já feita
+  const ajDe=t=>({gap:0,desl:0,vdesl:0,...(AJ_PADRAO[t]||{}),...(aj[t]||{})});
+  let tam=(pref.v===4||pref.v===5)&&ETQ_TAM[pref.tam]?pref.tam:Object.keys(ETQ_TAM)[0];
+  let {gap,desl,vdesl}=ajDe(tam);
+  const temAjuste=t=>{const [w,h,c]=ETQ_TAM[t]; return c>1||(w>=80&&h<w);};
   const lst=itens.map(({p,n})=>({p,n:Math.max(0,n|0)}));
   modal(`<h3>${esc(titulo)}</h3>
     ${sub?`<p style="margin:0;font-size:13px;color:var(--muted)">${sub}</p>`:""}
     <div class="formrow" style="align-items:end">
       <div class="field"><label>Tamanho da etiqueta</label><select class="inp" id="et_tam">${Object.keys(ETQ_TAM).map(t=>`<option value="${t}" ${t===tam?"selected":""}>${etqNome(t)}</option>`).join("")}</select></div>
       <div class="field" id="et_gapf" style="max-width:150px" ${ETQ_TAM[tam][2]>1?"":"hidden"}><label>Espaço entre etiquetas (mm)</label><input class="inp" id="et_gap" type="number" min="-3" max="10" step="0.5" value="${gap}" title="Negativo aproxima as colunas (use se a 2ª e a 3ª saírem para a direita)"></div>
-      <div class="field" id="et_deslf" style="max-width:150px" ${ETQ_TAM[tam][2]>1?"":"hidden"} title="Se a impressão sair deslocada: positivo empurra para a direita, negativo para a esquerda"><label>Ajuste lateral (mm)</label><input class="inp" id="et_desl" type="number" min="-4" max="4" step="0.5" value="${desl}"></div>
-      <div class="field" id="et_vdeslf" style="max-width:150px" ${ETQ_TAM[tam][2]>1?"":"hidden"} title="Se a impressão sair alta ou baixa: negativo sobe, positivo desce"><label>Ajuste vertical (mm)</label><input class="inp" id="et_vdesl" type="number" min="-11" max="8" step="0.5" value="${vdesl}"></div>
+      <div class="field" id="et_deslf" style="max-width:150px" ${temAjuste(tam)?"":"hidden"} title="Se a impressão sair deslocada: positivo empurra para a direita, negativo para a esquerda"><label>Ajuste lateral (mm)</label><input class="inp" id="et_desl" type="number" min="-4" max="4" step="0.5" value="${desl}"></div>
+      <div class="field" id="et_vdeslf" style="max-width:150px" ${temAjuste(tam)?"":"hidden"} title="Se a impressão sair alta ou baixa: negativo sobe, positivo desce"><label>Ajuste vertical (mm)</label><input class="inp" id="et_vdesl" type="number" min="-11" max="8" step="0.5" value="${vdesl}"></div>
       <label class="chk" style="margin-bottom:10px"><input type="checkbox" id="et_preco" ${pref.semPreco?"":"checked"}> Mostrar preço</label>
     </div>
     <div class="tw" style="border:1px solid var(--border);border-radius:10px;max-height:44vh;overflow:auto"><table style="min-width:0">
@@ -1246,7 +1286,9 @@ function modalEtiquetas(itens,titulo="Imprimir etiquetas",sub=""){
   const total=()=>lst.reduce((s,x)=>s+x.n,0);
   const rot=()=>{$("#et_ok").textContent=`Imprimir ${total()} etiqueta(s)`;};
   $("#modalHost").querySelectorAll("[data-et]").forEach(x=>x.addEventListener("input",()=>{lst[+x.dataset.et].n=Math.max(0,parseInt(x.value)||0);rot();}));
-  $("#et_tam").addEventListener("change",e=>{tam=e.target.value; $("#et_gapf").hidden=$("#et_deslf").hidden=$("#et_vdeslf").hidden=!(ETQ_TAM[tam][2]>1);});
+  $("#et_tam").addEventListener("change",e=>{tam=e.target.value;
+    ({gap,desl,vdesl}=ajDe(tam)); $("#et_gap").value=gap; $("#et_desl").value=desl; $("#et_vdesl").value=vdesl;
+    $("#et_gapf").hidden=!(ETQ_TAM[tam][2]>1); $("#et_deslf").hidden=$("#et_vdeslf").hidden=!temAjuste(tam);});
   $("#et_vdesl").addEventListener("input",e=>{vdesl=Math.max(-11,Math.min(8,parseFloat(String(e.target.value).replace(",","."))||0));});
   $("#et_gap").addEventListener("input",e=>{gap=Math.max(-3,Math.min(10,parseFloat(String(e.target.value).replace(",","."))||0));});
   $("#et_desl").addEventListener("input",e=>{desl=Math.max(-4,Math.min(4,parseFloat(String(e.target.value).replace(",","."))||0));});
@@ -1256,7 +1298,7 @@ function modalEtiquetas(itens,titulo="Imprimir etiquetas",sub=""){
     if(!sel.length) return $("#et_err").textContent="Informe a quantidade de etiquetas.";
     if(total()>500) return $("#et_err").textContent="No máximo 500 etiquetas por vez.";
     let gerados=0; sel.forEach(x=>{ if(!x.p.ean){ x.p.ean=gerarEAN(); gerados++; } });
-    const comPreco=$("#et_preco").checked; etqSalvaPref({v:4,tam,gap,desl,vdesl,semPreco:!comPreco});
+    const comPreco=$("#et_preco").checked; aj[tam]={gap,desl,vdesl}; etqSalvaPref({v:5,tam,aj,semPreco:!comPreco});
     $("#et_ok").disabled=true; $("#et_ok").textContent="Preparando…";
     try{ await imprimirEtiquetas(sel,tam,comPreco,gap,desl,vdesl); closeModal(); if(current==="estoque") viewEstoque();
       if(gerados) toast(`${gerados} produto(s) ganharam código de barras.`); }
