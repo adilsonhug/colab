@@ -1114,7 +1114,7 @@ function gerarEAN(){
   return c;
 }
 // [largura, altura, etiquetas por fileira] em mm; a primeira é o padrão
-const ETQ_TAM={"35x65x3":[35,65,3],"50x75x2":[50,75,2],"40x25":[40,25,1],"50x30":[50,30,1],"33x22":[33,22,1]};
+const ETQ_TAM={"35x65x3":[35,65,3],"50x75x2":[50,75,2],"50x40x2":[50,40,2],"40x25":[40,25,1],"50x30":[50,30,1],"33x22":[33,22,1]};
 const etqNome=t=>{const [w,h,c]=ETQ_TAM[t]; return `${w} × ${h} mm${c>1?` — ${c} por fileira`:""}`;};
 const etqPref=()=>{ try{ return JSON.parse(localStorage.getItem("colab_etq")||"{}"); }catch(e){ return {}; } };
 const etqSalvaPref=o=>{ try{ localStorage.setItem("colab_etq",JSON.stringify(o)); }catch(e){} };
@@ -1132,6 +1132,7 @@ async function imprimirEtiquetas(itens,tam,comPreco,gap=0,desl=0,vdesl=0){
   const [W,H,C=1]=ETQ_TAM[tam]||ETQ_TAM["40x25"], k=H/25;
   const vert=H>W; // etiqueta em pé (ex.: 35 × 65): layout próprio
   const grande=!vert&&W>=80; // etiqueta grande (ex.: 100 × 75): layout em duas colunas
+  const deitada=!vert&&!grande&&C>1; // etiqueta deitada em rolo de várias colunas (ex.: 50 × 40, 2 por fileira)
   const PW=C*W+(C-1)*gap;
   // desl: anda com o conteúdo dentro de cada etiqueta (+ direita, − esquerda) sem sair da área impressa
   // etiqueta em pé: conteúdo com no máximo 30 mm de largura, centralizado → margem de segurança se a impressão desalinhar
@@ -1141,10 +1142,11 @@ async function imprimirEtiquetas(itens,tam,comPreco,gap=0,desl=0,vdesl=0){
   const pl=Math.max(0,mrg+desl), pr=Math.max(0,mrg-desl), BW=Math.max(20,W-pl-pr);
   // altura da página MENOR que a etiqueta: se for maior, a térmica passa do fim e pula uma etiqueta.
   // Com sensor de gap, ela avança sozinha até o começo da próxima. Na Elgin da loja a impressão começa ~8 mm abaixo do topo.
-  const PH=vert?(largo?H-6:H-13):grande?H-3:H;
+  const PH=vert?(largo?H-6:H-13):grande||deitada?H-3:H;
   // vdesl: sobe (−) ou desce (+) o conteúdo; com o padrão (−8) o COLAB. fica colado no topo da área impressa
   const pt=Math.max(0,8+vdesl);
   const gpt=Math.max(0,4+vdesl), gpl=Math.max(0,4+desl), gpr=Math.max(0,4-desl); // margens da etiqueta grande
+  const dpt=Math.max(0,2.5+vdesl), dpl=Math.max(0,3+desl), dpr=Math.max(0,3-desl); // margens da etiqueta deitada
   const svgDe=code=>{const s=document.createElementNS("http://www.w3.org/2000/svg","svg");
     JB(s,code,{format:eanValido(code)?"EAN13":"CODE128",width:2,height:50,margin:0,fontSize:16,textMargin:1,displayValue:true,flat:true});
     // viewBox faz o código escalar para o tamanho da etiqueta sem cortar
@@ -1183,6 +1185,14 @@ async function imprimirEtiquetas(itens,tam,comPreco,gap=0,desl=0,vdesl=0){
         <div class="bc">${imgDe(p.ean,0.375,40)}</div>
       </div>
       <div class="vs">“Vista a sua melhor versão.”</div></div>`
+    :deitada?`<div class="etq">
+      <div class="d-top"><b>COLAB.</b>${comPreco?`<span class="pr">${brl(p.preco)}</span>`:""}</div>
+      ${p.marca?`<div class="mc">${esc(String(p.marca).toUpperCase())}</div>`:""}
+      <div class="nm">${esc(p.nome)}</div>
+      <div class="d-lin"><span>${p.cor?esc(corCurta(p)):""}</span>${p.tam?`<b class="tm">Tam. ${esc(p.tam)}</b>`:""}</div>
+      ${p.sku?`<div class="cd">Cód. ${esc(p.sku)}</div>`:""}
+      <div class="bc">${imgDe(p.ean,0.375,W-dpl-dpr)}</div>
+      <div class="vs">“Vista a sua melhor versão.”</div></div>`
     :`<div class="etq">
       <div class="top"><b>COLAB</b>${comPreco?`<b class="pr">${brl(p.preco)}</b>`:""}</div>
       <div class="nm">${esc(p.nome)}</div>
@@ -1211,6 +1221,23 @@ async function imprimirEtiquetas(itens,tam,comPreco,gap=0,desl=0,vdesl=0){
     .pr.longo{font-size:${z(9)}pt}
     .vs{font-size:${z(5.6)}pt;font-weight:700;font-style:italic;line-height:1.1;margin-top:${z(.8)}mm;white-space:nowrap}
     .vs small{display:block;font-size:5.3pt;font-style:normal;font-weight:700;margin-top:0}`
+   :deitada?`
+    /* etiqueta deitada 50 × 40 (2 por fileira): tudo em negrito, compacto */
+    .etq{padding:${dpt}mm ${dpr}mm 0 ${dpl}mm;font-weight:700;text-align:center;-webkit-font-smoothing:none;text-rendering:geometricPrecision}
+    .etq>*{max-width:100%;overflow:hidden}
+    .d-top{display:flex;justify-content:space-between;align-items:baseline;border-bottom:.4mm solid #000;padding-bottom:.6mm}
+    .d-top b{font-family:"Arial Black",Arial,sans-serif;font-weight:900;font-size:10pt;letter-spacing:.06em;line-height:1}
+    .pr{font-family:"Arial Black",Arial,sans-serif;font-weight:900;font-size:10.5pt;line-height:1;white-space:nowrap}
+    .mc{font-size:7pt;font-weight:900;letter-spacing:.08em;line-height:1.1;margin-top:.8mm;white-space:nowrap;text-overflow:ellipsis}
+    .nm{font-size:7.5pt;font-weight:700;line-height:1.15;margin-top:.3mm;white-space:nowrap;text-overflow:ellipsis}
+    .d-lin{display:flex;justify-content:center;align-items:baseline;gap:2mm;font-size:7pt;line-height:1.15;margin-top:.3mm;white-space:nowrap}
+    .d-lin span{overflow:hidden;text-overflow:ellipsis}
+    .tm{font-size:9pt;font-weight:900}
+    .cd{font-size:6.5pt;font-weight:700;line-height:1.1;margin-top:.2mm;white-space:nowrap;text-overflow:ellipsis}
+    .bc{flex:none;margin-top:.8mm}
+    .bc img{display:block;margin:0 auto;height:7mm;image-rendering:pixelated}
+    .bc .num{font-family:Arial,Helvetica,sans-serif;font-weight:700;font-size:7pt;line-height:1.1;letter-spacing:.08em;margin-top:.3mm}
+    .vs{font-size:5.6pt;font-weight:700;font-style:italic;line-height:1.1;margin-top:.6mm;white-space:nowrap}`
    :grande?`
     /* etiqueta grande 100 × 75: topo (marca da loja + preço), meio em 2 colunas (texto | código de barras), frase embaixo */
     .etq{padding:${gpt}mm ${gpr}mm 0 ${gpl}mm;font-weight:700;-webkit-font-smoothing:none;text-rendering:geometricPrecision}
@@ -1243,11 +1270,11 @@ async function imprimirEtiquetas(itens,tam,comPreco,gap=0,desl=0,vdesl=0){
     body{font-family:Arial,Helvetica,sans-serif;color:#000}
     /* fileira 2 mm menor que a etiqueta: se passar da altura, o navegador cria página extra e a impressora pula etiqueta */
     /* em pé: a fileira tem só a altura do conteúdo, para caber mesmo se o Chrome/driver colocar margem no topo */
-    .fila{width:${PW}mm;height:${vert||grande?"auto":(PH-2)+"mm"};display:flex;align-items:flex-start;overflow:hidden;page-break-after:always;break-after:page;page-break-inside:avoid;break-inside:avoid}
+    .fila{width:${PW}mm;height:${vert||grande||deitada?"auto":(PH-2)+"mm"};display:flex;align-items:flex-start;overflow:hidden;page-break-after:always;break-after:page;page-break-inside:avoid;break-inside:avoid}
     /* distância entre colunas por margem (aceita negativo: aproxima as colunas quando o passo do rolo é menor que a etiqueta) */
     .fila>.etq+.etq{margin-left:${gap}mm}
     .fila:last-child{page-break-after:auto;break-after:auto}
-    .etq{width:${W}mm;height:${vert||grande?"auto":(PH-2)+"mm"};flex:none;box-sizing:border-box;display:flex;flex-direction:column;overflow:hidden}
+    .etq{width:${W}mm;height:${vert||grande||deitada?"auto":(PH-2)+"mm"};flex:none;box-sizing:border-box;display:flex;flex-direction:column;overflow:hidden}
     ${css}
   </style></head><body>${filas.join("")}</body></html>`;
   const fr=document.createElement("iframe");
@@ -1261,7 +1288,7 @@ function modalEtiquetas(itens,titulo="Imprimir etiquetas",sub=""){
   // Na Elgin da loja a impressão começa ~8 mm abaixo do topo → ajuste vertical padrão −8. Preferências antigas não valem mais.
   // v5: cada tamanho de etiqueta guarda os próprios ajustes (a calibração de uma não mexe na outra)
   const pref=etqPref();
-  const AJ_PADRAO={"35x65x3":{gap:-1.5,desl:0,vdesl:-8},"50x75x2":{gap:0,desl:0,vdesl:-4}};
+  const AJ_PADRAO={"35x65x3":{gap:-1.5,desl:0,vdesl:-8},"50x75x2":{gap:0,desl:0,vdesl:-4},"50x40x2":{gap:0,desl:0,vdesl:0}};
   const aj=pref.v===5&&pref.aj?pref.aj:{};
   if(pref.v===4) aj["35x65x3"]={gap:pref.gap??-1.5,desl:pref.desl??0,vdesl:pref.vdesl??-8}; // aproveita a calibração já feita
   const ajDe=t=>({gap:0,desl:0,vdesl:0,...(AJ_PADRAO[t]||{}),...(aj[t]||{})});
