@@ -2408,7 +2408,7 @@ function usaCashback(tel,valor){
   let r=valor;
   cashDisp(tel).sort((a,b)=>a.validade.localeCompare(b.validade)).forEach(c=>{ if(r<=0) return; const u=Math.min(c.saldo,r); c.saldo=+(c.saldo-u).toFixed(2); r=+(r-u).toFixed(2); });
 }
-let CLF={q:"",promo:false,cb:false}, CLSEL=new Set();
+let CLF={q:"",promo:false,cb:false,v7:false}, CLSEL=new Set();
 function clientesLista(){
   const hoje=hojeISO();
   return CLIENTES.map(c=>{ const comp=comprasDe(c.tel), disp=cashDisp(c.tel);
@@ -2418,23 +2418,25 @@ function clientesLista(){
 }
 function viewClientes(){
   const isAdmin=ADM(), todos=clientesLista(), q=CLF.q.trim();
-  const lista=todos.filter(x=>(!q||busca([x.c.nome,x.c.tel,telFmt(x.c.tel)],q))&&(!CLF.promo||x.c.promo)&&(!CLF.cb||x.saldo>0))
-    .sort((a,b)=>(b.ult||"").localeCompare(a.ult||"")||String(a.c.nome).localeCompare(String(b.c.nome),"pt-BR"));
+  const lista=todos.filter(x=>(!q||busca([x.c.nome,x.c.tel,telFmt(x.c.tel)],q))&&(!CLF.promo||x.c.promo)&&(!CLF.cb||x.saldo>0)&&(!CLF.v7||x.vence7>0))
+    .sort((a,b)=>(CLF.v7?(a.vence||"").localeCompare(b.vence||""):0)||(b.ult||"").localeCompare(a.ult||"")||String(a.c.nome).localeCompare(String(b.c.nome),"pt-BR"));
   const aberto=todos.reduce((s,x)=>s+x.saldo,0), v7=todos.reduce((s,x)=>s+x.vence7,0);
   CLSEL.forEach(t=>{ if(!clienteDe(t)) CLSEL.delete(t); });
+  const tl=on=>`style="cursor:pointer;${on?"outline:2px solid var(--accent);outline-offset:-2px":""}" title="Clique para filtrar a lista"`;
   const todosSel=lista.length&&lista.every(x=>CLSEL.has(x.c.tel));
   $("#view").innerHTML=`
   <div class="section">
     <div class="tiles compact" style="margin-bottom:14px">
-      <div class="tile"><div class="lbl">Clientes cadastrados</div><div class="val tnum">${todos.length}</div><div class="sub">${todos.filter(x=>x.n).length} com compra</div></div>
-      <div class="tile"><div class="lbl"><span class="dot" style="background:var(--good)"></span>Aceitam promoções</div><div class="val tnum">${todos.filter(x=>x.c.promo).length}</div><div class="sub">podem receber mensagem</div></div>
-      <div class="tile"><div class="lbl"><span class="dot" style="background:#b8860b"></span>Cashback em aberto</div><div class="val tnum">${brl(aberto)}</div><div class="sub">${todos.filter(x=>x.saldo>0).length} cliente(s)</div></div>
-      <div class="tile"><div class="lbl"><span class="dot" style="background:var(--crit)"></span>Vence em 7 dias</div><div class="val tnum">${brl(v7)}</div><div class="sub">bom para chamar o cliente</div></div>
+      <div class="tile" data-clt="todos" ${tl(!CLF.promo&&!CLF.cb&&!CLF.v7)}><div class="lbl">Clientes cadastrados</div><div class="val tnum">${todos.length}</div><div class="sub">${todos.filter(x=>x.n).length} com compra · ver todos</div></div>
+      <div class="tile" data-clt="promo" ${tl(CLF.promo)}><div class="lbl"><span class="dot" style="background:var(--good)"></span>Aceitam promoções</div><div class="val tnum">${todos.filter(x=>x.c.promo).length}</div><div class="sub">podem receber mensagem</div></div>
+      <div class="tile" data-clt="cb" ${tl(CLF.cb)}><div class="lbl"><span class="dot" style="background:#b8860b"></span>Cashback em aberto</div><div class="val tnum">${brl(aberto)}</div><div class="sub">${todos.filter(x=>x.saldo>0).length} cliente(s)</div></div>
+      <div class="tile" data-clt="v7" ${tl(CLF.v7)}><div class="lbl"><span class="dot" style="background:var(--crit)"></span>Vence em 7 dias</div><div class="val tnum">${brl(v7)}</div><div class="sub">${todos.filter(x=>x.vence7>0).length} cliente(s) · clique para ver</div></div>
     </div>
     <div class="toolbar" style="flex-wrap:wrap;gap:10px">
       <input class="inp" id="cl_q" placeholder="Buscar por nome ou telefone" value="${esc(CLF.q)}" style="flex:1;min-width:220px">
       <label style="display:flex;gap:6px;align-items:center;font-size:13px;cursor:pointer"><input type="checkbox" id="cl_promo" ${CLF.promo?"checked":""} style="width:16px;height:16px">Só quem aceita promoções</label>
       <label style="display:flex;gap:6px;align-items:center;font-size:13px;cursor:pointer"><input type="checkbox" id="cl_cb" ${CLF.cb?"checked":""} style="width:16px;height:16px">Só com cashback</label>
+      ${CLF.v7?`<button class="chip crit" id="cl_v7" style="border:0;cursor:pointer" title="Tirar o filtro">Vence em 7 dias ✕</button>`:""}
       <button class="btn ghost" id="cl_novo">+ Cliente</button>
       ${isAdmin?`<button class="btn ghost" id="cl_xls">Exportar Excel</button><button class="btn ghost" id="cl_copy">Copiar telefones</button>`:""}
       <button class="btn ghost" id="cl_cfg" title="Alterar exige a senha do administrador">🔒 Cashback: ${n0(CONFIG.cashPct)}% · ${CONFIG.cashDias} dias</button>
@@ -2457,6 +2459,11 @@ function viewClientes(){
   $("#cl_q").addEventListener("input",e=>{CLF.q=e.target.value;rerender(viewClientes);});
   $("#cl_promo").addEventListener("change",e=>{CLF.promo=e.target.checked;viewClientes();});
   $("#cl_cb").addEventListener("change",e=>{CLF.cb=e.target.checked;viewClientes();});
+  $("#cl_v7")?.addEventListener("click",()=>{CLF.v7=false;viewClientes();});
+  $("#view").querySelectorAll("[data-clt]").forEach(t=>t.addEventListener("click",()=>{
+    const k=t.dataset.clt, liga=k!=="todos"&&!CLF[k];
+    CLF.promo=CLF.cb=CLF.v7=false; if(liga) CLF[k]=true; viewClientes();
+  }));
   $("#cl_novo").addEventListener("click",()=>modalCliente(null));
   $("#cl_cfg").addEventListener("click",modalConfigCashback);
   $("#cl_xls")?.addEventListener("click",()=>excelClientes(lista));
