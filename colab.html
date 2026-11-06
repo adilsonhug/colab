@@ -488,7 +488,7 @@ function colChart({cats,series,h=170,labels=true}){
     t.textContent=b.dataset.tip; const r=b.getBoundingClientRect(); t.style.opacity=1;
     t.style.left=Math.min(innerWidth-t.offsetWidth-8,Math.max(8,r.left+r.width/2-t.offsetWidth/2))+"px"; t.style.top=(r.top-t.offsetHeight-8)+"px";});
 })();
-const payIcon=p=>({"Pix":"#1f9d63","Dinheiro":"#c07c00","Cartão crédito":"#e0242b","Cartão débito":"#3257c5","Desconto em folha":"#7a4cc2","Vale-troca":"#0e8a8a","Cashback":"#b8860b"}[p]||"#6f6a60");
+const payIcon=p=>({"Pix":"#1f9d63","Dinheiro":"#c07c00","Dinheiro do caixa":"#c07c00","Cartão crédito":"#e0242b","Cartão débito":"#3257c5","Desconto em folha":"#7a4cc2","Vale-troca":"#0e8a8a","Cashback":"#b8860b"}[p]||"#6f6a60");
 
 function toast(msg){const t=$("#toast");t.textContent=msg;t.classList.add("show");clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove("show"),2200);}
 
@@ -2550,16 +2550,18 @@ function caixaResumo(c){
   const soma=t=>(c.movs||[]).filter(m=>m.tipo===t).reduce((s,m)=>s+m.valor,0);
   const sang=soma("sangria"), ref=soma("reforco");
   const devDin=devs.filter(d=>d.destino==="dinheiro").reduce((s,d)=>s+d.valor,0);
+  const desp=+DESPESAS.filter(d=>d.cx===c.id).reduce((s,d)=>s+d.valor,0).toFixed(2);
   const vales=vendas.reduce((s,v)=>s+(v.vale?v.vale.valor:0),0);
-  const esperado=+(c.troco+(porPay["Dinheiro"]||0)+ref-sang-devDin).toFixed(2);
-  return {n:vendas.length,total:+vendas.reduce((s,v)=>s+v.valor,0).toFixed(2),porPay,sang,ref,devDin,devN:devs.length,vales,esperado};
+  const esperado=+(c.troco+(porPay["Dinheiro"]||0)+ref-sang-devDin-desp).toFixed(2);
+  return {n:vendas.length,total:+vendas.reduce((s,v)=>s+v.valor,0).toFixed(2),porPay,sang,ref,devDin,devN:devs.length,desp,vales,esperado};
 }
 const difTxt=d=>Math.abs(d)<0.005?`<span class="chip good">Bateu</span>`:d>0?`<span class="chip warn">Sobrou ${brl(d)}</span>`:`<span class="chip crit">Faltou ${brl(-d)}</span>`;
 function viewCaixa(){
   const isAdmin=ADM(), c=caixaAberto(), r=c&&caixaResumo(c);
   const hist=CAIXAS.filter(x=>x.fech).slice().sort((a,b)=>String(b.fech.data+b.fech.hora).localeCompare(String(a.fech.data+a.fech.hora))||b.id-a.id).slice(0,60);
   const movs=c?[...(c.movs||[]).map(m=>({...m,lbl:m.tipo==="sangria"?"Sangria":"Reforço",sin:m.tipo==="sangria"?-1:1})),
-    ...DEVOLUCOES.filter(d=>d.cx===c.id&&d.destino==="dinheiro").map(d=>({hora:d.hora,user:d.user,valor:d.valor,motivo:`Devolução — ${d.cliente}`,lbl:"Devolução",sin:-1}))]
+    ...DEVOLUCOES.filter(d=>d.cx===c.id&&d.destino==="dinheiro").map(d=>({hora:d.hora,user:d.user,valor:d.valor,motivo:`Devolução — ${d.cliente}`,lbl:"Devolução",sin:-1})),
+    ...DESPESAS.filter(d=>d.cx===c.id).map(d=>({hora:d.hora,user:d.user,valor:d.valor,motivo:`${d.forn}${d.desc&&d.desc!=="—"?` — ${d.desc}`:""}`,lbl:"Despesa",sin:-1}))]
     .sort((a,b)=>String(a.hora).localeCompare(String(b.hora))):[];
   $("#view").innerHTML=`
   <div class="section">
@@ -2571,6 +2573,7 @@ function viewCaixa(){
       <div class="tile"><div class="lbl">Troco inicial</div><div class="val tnum">${brl(c.troco)}</div></div>
       <div class="tile"><div class="lbl"><span class="dot" style="background:var(--accent)"></span>Vendas no caixa</div><div class="val tnum">${brl(r.total)}</div><div class="sub">${r.n} venda(s)${r.vales?` · +${brl(r.vales)} em vale`:""}</div></div>
       <div class="tile"><div class="lbl"><span class="dot" style="background:var(--crit)"></span>Sangrias</div><div class="val tnum">${brl(r.sang+r.devDin)}</div><div class="sub">reforços ${brl(r.ref)}</div></div>
+      <div class="tile"><div class="lbl"><span class="dot" style="background:var(--crit)"></span>Despesas pagas do caixa</div><div class="val tnum">${brl(r.desp)}</div><div class="sub">lance em Despesas → "Dinheiro do caixa"</div></div>
       ${isAdmin?`<div class="tile"><div class="lbl"><span class="dot" style="background:#c07c00"></span>Dinheiro na gaveta</div><div class="val tnum">${brl(r.esperado)}</div><div class="sub">esperado agora</div></div>`:""}
     </div>
     <div class="toolbar">
@@ -2586,7 +2589,7 @@ function viewCaixa(){
         <div class="card-b ${movs.length?"pad0":""}">${movs.length?`<div class="tw"><table style="min-width:0"><tbody>${movs.map(m=>`<tr>
           <td class="tnum">${esc(m.hora||"")}</td><td><b>${m.lbl}</b><div class="hint">${esc(m.motivo||"")} · ${esc(m.user||"")}</div></td>
           <td class="num tnum" style="color:${m.sin<0?"var(--crit)":"var(--good)"}">${m.sin<0?"−":"+"}${brl(m.valor)}</td></tr>`).join("")}</tbody></table></div>`
-          :`<div class="infobox" style="text-align:center;color:var(--muted)">Sem sangria ou reforço.</div>`}</div></div>
+          :`<div class="infobox" style="text-align:center;color:var(--muted)">Sem sangria, reforço ou despesa.</div>`}</div></div>
     </div>`
     :`<div class="card" style="margin-bottom:14px"><div class="card-b" style="display:flex;flex-direction:column;align-items:center;gap:12px;padding:34px 16px;text-align:center">
       <div style="font-family:var(--font-display);font-weight:800;font-size:22px">Caixa fechado</div>
@@ -2655,7 +2658,7 @@ function modalFecharCaixa(){
       ${outras.map(([k,v])=>miniStat(`${esc(k)} <span class="hint">(confira na maquininha / banco)</span>`,brl(v))).join("")}
       ${isAdmin?miniStat("Dinheiro esperado na gaveta",brl(r.esperado)):""}
     </div>
-    ${isAdmin?`<div class="hint">Troco ${brl(c.troco)} + vendas em dinheiro ${brl(r.porPay["Dinheiro"]||0)} + reforços ${brl(r.ref)} − sangrias ${brl(r.sang)}${r.devDin?` − devoluções ${brl(r.devDin)}`:""}</div>`:""}
+    ${isAdmin?`<div class="hint">Troco ${brl(c.troco)} + vendas em dinheiro ${brl(r.porPay["Dinheiro"]||0)} + reforços ${brl(r.ref)} − sangrias ${brl(r.sang)}${r.devDin?` − devoluções ${brl(r.devDin)}`:""}${r.desp?` − despesas ${brl(r.desp)}`:""}</div>`:""}
     <div class="g g2">
       <div class="field"><label>Dinheiro contado na gaveta (R$) <span class="req">*</span></label><input class="inp" id="fc_cont" inputmode="decimal" placeholder="0,00" style="font-size:18px"></div>
       <div class="field"><label>Fica na gaveta para amanhã (troco)</label><input class="inp" id="fc_fica" inputmode="decimal" placeholder="0,00"></div>
@@ -2698,9 +2701,11 @@ function imprimirCaixa(c){
       ${r.vales?lin("Vale-troca usado (não é dinheiro novo)",brl(r.vales)):""}
       ${lin("Troco inicial",brl(c.troco))}${lin("Reforços",brl(r.ref))}${lin("Sangrias",brl(r.sang))}
       ${r.devDin?lin("Devoluções em dinheiro",brl(r.devDin)):""}
+      ${r.desp?lin("Despesas pagas com dinheiro do caixa",brl(r.desp)):""}
       ${f.fica!=null?lin("Fica na gaveta para o próximo dia",brl(f.fica)):""}
     </tbody></table>
     ${(c.movs||[]).length?`<h1 style="font-size:12px;margin-top:12px">Sangrias e reforços</h1><table><tbody>${c.movs.map(m=>`<tr><td>${esc(m.hora)}</td><td>${m.tipo==="sangria"?"Sangria":"Reforço"}</td><td>${esc(m.motivo||"")}</td><td>${esc(m.user)}</td><td class="n">${brl(m.valor)}</td></tr>`).join("")}</tbody></table>`:""}
+    ${DESPESAS.some(d=>d.cx===c.id)?`<h1 style="font-size:12px;margin-top:12px">Despesas pagas do caixa</h1><table><tbody>${DESPESAS.filter(d=>d.cx===c.id).map(d=>`<tr><td>${esc(d.hora||"")}</td><td>${esc(d.forn)}</td><td>${esc(d.desc||"")}</td><td>${esc(d.user||"")}</td><td class="n">${brl(d.valor)}</td></tr>`).join("")}</tbody></table>`:""}
     ${f.obs?`<div class="aviso">${esc(f.obs)}</div>`:""}
     <div class="ass"><div>Responsável pelo caixa</div><div>Conferido por</div></div>`,"portrait");
 }
@@ -3197,15 +3202,29 @@ function modalDespesa(){
     </div>
     <div class="field"><label>Descrição</label><input class="inp" id="d_desc" placeholder="Ex.: Envio de pedidos"></div>
     <div class="formrow">
-      <div class="field"><label>Pagamento</label><select class="inp" id="d_pay"><option>Pix</option><option>Dinheiro</option><option>Cartão crédito</option><option>Cartão débito</option><option>Link pagamento</option><option>Saída</option></select></div>
+      <div class="field"><label>Pagamento</label><select class="inp" id="d_pay"><option>Pix</option><option>Dinheiro do caixa</option><option>Dinheiro</option><option>Cartão crédito</option><option>Cartão débito</option><option>Link pagamento</option><option>Saída</option></select></div>
       <div class="field"><label>Valor (R$)</label><input class="inp" id="d_val" type="number" step="0.01" placeholder="0,00"></div>
     </div>
+    <div class="hint" id="d_cxhint" hidden>Sai da gaveta do caixa aberto e entra no fechamento do dia. "Dinheiro" (sem caixa) é dinheiro de fora da gaveta.</div>
     <div class="row"><button class="btn ghost" data-close>Cancelar</button><button class="btn" id="d_save">Lançar despesa</button></div>`);
+  const cxPay=()=>$("#d_pay").value==="Dinheiro do caixa";
+  const dica=()=>{ $("#d_cxhint").hidden=!cxPay(); if(cxPay()) $("#d_data").value=hojeISO(); $("#d_data").disabled=cxPay(); };
+  $("#d_pay").addEventListener("change",dica);
   $("#d_save").addEventListener("click",()=>{
     const forn=$("#d_forn").value.trim(), val=parseFloat($("#d_val").value);
     if(!forn||isNaN(val)||val<=0){toast("Preencha fornecedor e valor.");return;}
-    DESPESAS.unshift({id:DESPESAS.length+1,data:$("#d_data").value,forn,desc:$("#d_desc").value.trim()||"—",pay:$("#d_pay").value,valor:val});
-    closeModal(); viewDespesas(); toast("Despesa lançada.");
+    const d={id:DESPESAS.reduce((m,x)=>Math.max(m,+x.id||0),0)+1,data:$("#d_data").value,forn,desc:$("#d_desc").value.trim()||"—",pay:$("#d_pay").value,valor:+val.toFixed(2)};
+    if(cxPay()){
+      const c=caixaAberto();
+      if(!c){ const dados={forn,desc:$("#d_desc").value,val:$("#d_val").value};
+        return modalAbrirCaixa(()=>{ modalDespesa(); $("#d_forn").value=dados.forn; $("#d_desc").value=dados.desc; $("#d_val").value=dados.val; $("#d_pay").value="Dinheiro do caixa"; $("#d_pay").dispatchEvent(new Event("change")); },
+          "Para pagar com dinheiro do caixa, abra o caixa primeiro."); }
+      const r=caixaResumo(c);
+      if(val>r.esperado+0.005&&!confirm(`O valor é maior que o dinheiro esperado na gaveta (${brl(r.esperado)}). Lançar mesmo assim?`)) return;
+      Object.assign(d,{data:hojeISO(),cx:c.id,hora:horaAgora(),user:SESSION.name});
+    }
+    DESPESAS.unshift(d);
+    closeModal(); viewDespesas(); toast(d.cx?`Despesa de ${brl(val)} lançada e descontada do caixa.`:"Despesa lançada.");
   });
 }
 /* ---------------- CADASTRO DE PRODUTO ---------------- */
