@@ -2559,17 +2559,20 @@ const ordItensTam=ps=>ps.slice().sort((a,b)=>ordTam(String(a.tam||""),String(b.t
 function lojaModelos(){
   const m={};
   ESTOQUE.forEach(p=>{ if(!p||!p.nome) return; const k=modKey(p); (m[k]=m[k]||{k,nome:p.nome,cor:p.cor,cat:p.cat,itens:[]}).itens.push(p); });
-  return Object.values(m).map(x=>{ const c=LOJA.mod[x.k]||{};
-    return {...x,on:!!c.on,foto:c.foto||"",desc:c.desc||"",preco:Math.min(...x.itens.map(p=>+p.preco||0)),
+  return Object.values(m).map(x=>{ const c=LOJA.mod[x.k]||{}, fotos=fotosDe(c);
+    return {...x,on:!!c.on,fotos,foto:fotos[0]||"",desc:c.desc||"",preco:Math.min(...x.itens.map(p=>+p.preco||0)),
       qtd:x.itens.reduce((s,p)=>s+Math.max(0,p.qtd||0),0),tams:ordItensTam(x.itens)}; });
 }
-// o que vai para o site: só modelos marcados; de cada tamanho só "tem / não tem"
+// fotos do modelo: lista (a 1ª é a principal); "foto" é do formato antigo, de uma foto só
+const fotosDe=m=>m&&Array.isArray(m.fotos)?m.fotos.filter(Boolean):(m&&m.foto?[m.foto]:[]);
+const LOJA_MAXFOTOS=6, LOJA_MAXQTD=10;
+// o que vai para o site: só modelos marcados; de cada tamanho, se tem e até quantas dá para pedir (máx. 10 — o site não mostra o número)
 function lojaDados(){
   const c=lojaCfg();
   const prods=lojaModelos().filter(x=>x.on).map(x=>{ const t={};
-    x.tams.forEach(p=>{ const k=String(p.tam); if(!t[k]) t[k]={t:k,ok:false,sku:p.sku,preco:+p.preco||0};
-      if(p.qtd>0&&!t[k].ok) Object.assign(t[k],{ok:true,sku:p.sku,preco:+p.preco||0}); });
-    return {id:x.k,nome:x.nome,cor:x.cor,cat:x.cat,desc:x.desc,foto:x.foto,preco:x.preco,tams:Object.values(t)}; });
+    x.tams.forEach(p=>{ const k=String(p.tam); if(!t[k]) t[k]={t:k,ok:false,n:0,sku:p.sku,preco:+p.preco||0};
+      if(p.qtd>0&&!t[k].ok) Object.assign(t[k],{ok:true,n:Math.min(LOJA_MAXQTD,p.qtd),sku:p.sku,preco:+p.preco||0}); });
+    return {id:x.k,nome:x.nome,cor:x.cor,cat:x.cat,desc:x.desc,foto:x.foto,fotos:x.fotos,preco:x.preco,tams:Object.values(t)}; });
   return {loja:{whats:telNum(c.whats),insta:String(c.insta||"").replace(/^@/,""),texto:c.texto,entrega:!!c.entrega,taxa:+c.taxa||0,
     entregaTxt:c.entregaTxt,retirada:!!c.retirada,endereco:c.endereco},prods};
 }
@@ -2613,24 +2616,55 @@ async function lojaFotos(refs){
   for(let i=0;i<falta.length;i+=40){ const lote=falta.slice(i,i+40); lote.forEach(r=>FOTOS[r]="");
     try{ (await DB.lojaPublica("loja_fotos_ler",{p_refs:lote})||[]).forEach(f=>{FOTOS[f.ref]=f.img;}); }catch(e){ lote.forEach(r=>delete FOTOS[r]); return; } }
 }
-function reduzFoto(file,max=900){
+// 1400 px para o zoom do site mostrar detalhe; baixa a qualidade até caber no limite do banco
+function reduzFoto(file,max=1400){
   return new Promise((ok,erro)=>{ const img=new Image(), url=URL.createObjectURL(file);
-    img.onload=()=>{ const s=Math.min(1,max/Math.max(img.width,img.height)), c=document.createElement("canvas");
-      c.width=Math.round(img.width*s); c.height=Math.round(img.height*s);
-      const g=c.getContext("2d"); g.fillStyle="#fff"; g.fillRect(0,0,c.width,c.height); g.drawImage(img,0,0,c.width,c.height); URL.revokeObjectURL(url);
-      let d=c.toDataURL("image/jpeg",.8); if(d.length>350000) d=c.toDataURL("image/jpeg",.6); ok(d); };
+    img.onload=()=>{ let lado=max, d="";
+      for(let t=0;t<4;t++){ const s=Math.min(1,lado/Math.max(img.width,img.height)), c=document.createElement("canvas");
+        c.width=Math.round(img.width*s); c.height=Math.round(img.height*s);
+        const g=c.getContext("2d"); g.fillStyle="#fff"; g.fillRect(0,0,c.width,c.height); g.drawImage(img,0,0,c.width,c.height);
+        d=c.toDataURL("image/jpeg",.82); if(d.length>420000) d=c.toDataURL("image/jpeg",.68);
+        if(d.length<=420000) break; lado=Math.round(lado*.8); }
+      URL.revokeObjectURL(url); ok(d); };
     img.onerror=()=>{ URL.revokeObjectURL(url); erro(new Error("imagem")); }; img.src=url; });
 }
-async function lojaTrocarFoto(k,file){
-  toast("Enviando foto…");
-  try{
-    const img=await reduzFoto(file), ref="f"+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
-    await DB.loja("loja_foto_salvar",{p_ref:ref,p_img:img});
-    const ant=(LOJA.mod[k]||{}).foto, era=LOJA.mod[k]||{}; FOTOS[ref]=img;
-    LOJA.mod[k]={...era,foto:ref,on:era.on===undefined?true:era.on};
-    if(ant) DB.loja("loja_foto_salvar",{p_ref:ant,p_img:null}).catch(()=>{});
-    viewLoja(); toast("Foto salva.");
-  }catch(e){ toast(/imagem/.test(e.message)?"Não foi possível ler essa imagem.":"Não foi possível salvar a foto: "+e.message); }
+const setFotos=(k,fotos)=>{ const era=LOJA.mod[k]||{}; const {foto,...resto}=era; LOJA.mod[k]={...resto,fotos,on:era.on===undefined?true:era.on}; };
+async function lojaAddFotos(k,files){
+  const atuais=fotosDe(LOJA.mod[k]), cabe=LOJA_MAXFOTOS-atuais.length;
+  if(cabe<=0) return toast(`Máximo de ${LOJA_MAXFOTOS} fotos por modelo.`);
+  const lista=[...files].slice(0,cabe), novas=[];
+  toast(`Enviando ${lista.length} foto(s)…`);
+  for(const f of lista){
+    try{ const img=await reduzFoto(f), ref="f"+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+      await DB.loja("loja_foto_salvar",{p_ref:ref,p_img:img}); FOTOS[ref]=img; novas.push(ref); }
+    catch(e){ toast(/imagem/.test(e.message)?"Não foi possível ler uma das imagens.":"Não foi possível salvar a foto: "+e.message); }
+  }
+  if(novas.length){ setFotos(k,[...fotosDe(LOJA.mod[k]),...novas]); toast(`${novas.length} foto(s) salva(s).${files.length>lista.length?` Limite de ${LOJA_MAXFOTOS} por modelo.`:""}`); }
+  if($("#lf_grade")) modalFotos(k); else viewLoja();
+}
+// gerenciar as fotos de um modelo: adicionar várias, escolher a principal, tirar
+function modalFotos(k){
+  const x=lojaModelos().find(m=>m.k===k); if(!x) return;
+  const fs=x.fotos;
+  modal(`<h3>Fotos — ${esc(x.nome)}</h3><div class="hint">${esc(x.cor||"")} · até ${LOJA_MAXFOTOS} fotos. A primeira é a que aparece na vitrine. Fotos de detalhe (tecido, estampa, etiqueta) ajudam a vender.</div>
+    <div id="lf_grade" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:10px;margin-top:4px">
+      ${fs.map((r,i)=>`<div style="border:1px solid var(--border);border-radius:10px;overflow:hidden;background:var(--surface-2)">
+        <div style="aspect-ratio:1/1;position:relative"><img data-foto="${esc(r)}" alt="" style="width:100%;height:100%;object-fit:cover">${i===0?`<span class="chip good" style="position:absolute;left:6px;top:6px">Principal</span>`:""}</div>
+        <div style="display:flex;gap:4px;padding:6px">${i?`<button class="btn ghost sm" data-fp="${i}" style="flex:1" title="Usar como principal">★</button>`:""}${i>0?`<button class="btn ghost sm" data-fl="${i}" title="Mover para a esquerda">◀</button>`:""}<button class="btn ghost sm" data-fx="${i}" style="flex:1" title="Tirar foto">✕</button></div></div>`).join("")}
+      ${fs.length<LOJA_MAXFOTOS?`<label style="aspect-ratio:1/1;border:2px dashed var(--border);border-radius:10px;display:grid;place-items:center;text-align:center;cursor:pointer;font-weight:700;font-size:13px;color:var(--muted)">📷<br>Adicionar<br>foto(s)<input type="file" accept="image/*" multiple id="lf_add" hidden></label>`:""}
+    </div>
+    <div class="row"><button class="btn" data-close>Pronto</button></div>`,"wide");
+  $("#lf_add")?.addEventListener("change",e=>{ if(e.target.files&&e.target.files.length) lojaAddFotos(k,e.target.files); });
+  const muda=f=>{ const a=fotosDe(LOJA.mod[k]); f(a); setFotos(k,a); modalFotos(k); };
+  $("#modalHost").querySelectorAll("[data-fp]").forEach(b=>b.addEventListener("click",()=>muda(a=>{ const [r]=a.splice(+b.dataset.fp,1); a.unshift(r); })));
+  $("#modalHost").querySelectorAll("[data-fl]").forEach(b=>b.addEventListener("click",()=>muda(a=>{ const i=+b.dataset.fl; [a[i-1],a[i]]=[a[i],a[i-1]]; })));
+  $("#modalHost").querySelectorAll("[data-fx]").forEach(b=>b.addEventListener("click",()=>{ if(!confirm("Tirar esta foto?")) return;
+    muda(a=>{ const [r]=a.splice(+b.dataset.fx,1); DB.loja("loja_foto_salvar",{p_ref:r,p_img:null}).catch(()=>{}); }); }));
+  const pinta=()=>$("#modalHost").querySelectorAll("img[data-foto]").forEach(i=>{ const f=FOTOS[i.dataset.foto]; if(f&&i.src!==f) i.src=f; });
+  pinta(); lojaFotos(fs).then(pinta);
+  // ao fechar, a tabela mostra a foto nova
+  const host=$("#modalHost"), obs=new MutationObserver(()=>{ if(!host.innerHTML.trim()){ obs.disconnect(); if(current==="loja") viewLoja(); } });
+  obs.observe(host,{childList:true});
 }
 let LJF={aba:"pedidos",q:"",f:"todos",ps:"abertos"};
 function viewLoja(){
@@ -2728,29 +2762,27 @@ function lojaProdutosHTML(mods){
     <div class="card"><div class="card-b pad0"><div class="tw"><table>
       <thead><tr><th style="width:70px">Foto</th><th>Modelo</th><th class="num">Preço</th><th>Tamanhos (estoque)</th><th>No site</th><th></th></tr></thead>
       <tbody>${mostra.length?mostra.map(x=>`<tr ${x.on?"":'style="opacity:.75"'}>
-        <td><div style="width:56px;height:56px;border-radius:8px;background:var(--surface-2);overflow:hidden;display:grid;place-items:center;font-size:10px;color:var(--muted)">${x.foto?`<img data-foto="${esc(x.foto)}" alt="" style="width:100%;height:100%;object-fit:cover">`:"sem foto"}</div></td>
+        <td><div style="width:56px;height:56px;border-radius:8px;background:var(--surface-2);overflow:hidden;display:grid;place-items:center;font-size:10px;color:var(--muted);position:relative;cursor:pointer" data-fm="${esc(x.k)}">${x.foto?`<img data-foto="${esc(x.foto)}" alt="" style="width:100%;height:100%;object-fit:cover">${x.fotos.length>1?`<span style="position:absolute;right:2px;bottom:2px;background:#000a;color:#fff;border-radius:6px;padding:0 4px;font-weight:700">${x.fotos.length}</span>`:""}`:"sem foto"}</div></td>
         <td><b>${esc(x.nome)}</b><div class="hint">${esc(x.cor||"")} · ${esc(x.cat||"")}</div>${x.desc?`<div class="hint" style="font-style:italic">${esc(x.desc.slice(0,80))}</div>`:""}</td>
         <td class="num tnum">${brl(x.preco)}</td>
         <td style="font-size:12px">${x.tams.map(p=>`<span class="chip ${p.qtd>0?"good":""}" style="margin:1px;${p.qtd>0?"":"opacity:.55;text-decoration:line-through"}">${esc(p.tam)}${p.qtd>0?` · ${p.qtd}`:""}</span>`).join("")}</td>
         <td><label style="display:flex;gap:6px;align-items:center;cursor:pointer;font-size:13px"><input type="checkbox" data-on="${esc(x.k)}" ${x.on?"checked":""} style="width:18px;height:18px">${x.on?"Sim":"Não"}</label>${x.on&&!x.foto?`<div class="hint" style="color:var(--warn)">sem foto</div>`:""}${x.on&&!x.qtd?`<div class="hint">aparece esgotado</div>`:""}</td>
         <td style="text-align:right;white-space:nowrap">
-          <label class="btn ghost sm" style="cursor:pointer">📷 ${x.foto?"Trocar foto":"Foto"}<input type="file" accept="image/*" data-fk="${esc(x.k)}" hidden></label>
+          ${x.fotos.length?`<button class="btn ghost sm" data-fm="${esc(x.k)}">📷 Fotos (${x.fotos.length})</button>`
+            :`<label class="btn ghost sm" style="cursor:pointer">📷 Fotos<input type="file" accept="image/*" multiple data-fk="${esc(x.k)}" hidden></label>`}
           <button class="btn ghost sm" data-dk="${esc(x.k)}">Texto</button>
-          ${x.foto?`<button class="btn ghost sm" data-rk="${esc(x.k)}" title="Remover foto">✕</button>`:""}
         </td></tr>`).join("")
       :`<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:24px">${mods.length?"Nenhum modelo com esses filtros.":"O estoque está vazio."}</td></tr>`}</tbody>
     </table></div></div></div>
-    <div class="hint" style="margin-top:10px">${lista.length>mostra.length?`Mostrando ${mostra.length} de ${lista.length} — use a busca. `:""}Cada linha é um modelo (produto + cor); o site mostra os tamanhos que têm estoque, sem a quantidade. A foto pode ser tirada pelo celular. Preço e estoque vêm do cadastro.</div>`;
+    <div class="hint" style="margin-top:10px">${lista.length>mostra.length?`Mostrando ${mostra.length} de ${lista.length} — use a busca. `:""}Cada linha é um modelo (produto + cor); o site mostra os tamanhos que têm estoque, sem a quantidade, e não deixa pedir mais do que tem. Até ${LOJA_MAXFOTOS} fotos por modelo, que podem ser tiradas pelo celular. Preço e estoque vêm do cadastro.</div>`;
   $("#lj_q").addEventListener("input",e=>{ LJF.q=e.target.value; rerender(viewLoja); });
   $("#lj_f").addEventListener("change",e=>{ LJF.f=e.target.value; viewLoja(); });
   const marca=on=>{ lista.forEach(x=>{ LOJA.mod[x.k]={...(LOJA.mod[x.k]||{}),on}; }); viewLoja(); toast(on?`${lista.length} modelo(s) no site.`:`${lista.length} modelo(s) fora do site.`); };
   $("#lj_all").addEventListener("click",()=>{ if(lista.length&&confirm(`Mostrar ${lista.length} modelo(s) no site?`)) marca(true); });
   $("#lj_none").addEventListener("click",()=>{ if(lista.length&&confirm(`Tirar ${lista.length} modelo(s) do site?`)) marca(false); });
   $("#lj_corpo").querySelectorAll("[data-on]").forEach(b=>b.addEventListener("change",()=>{ const k=b.dataset.on; LOJA.mod[k]={...(LOJA.mod[k]||{}),on:b.checked}; viewLoja(); }));
-  $("#lj_corpo").querySelectorAll("[data-fk]").forEach(b=>b.addEventListener("change",()=>{ if(b.files&&b.files[0]) lojaTrocarFoto(b.dataset.fk,b.files[0]); }));
-  $("#lj_corpo").querySelectorAll("[data-rk]").forEach(b=>b.addEventListener("click",()=>{
-    const k=b.dataset.rk, m=LOJA.mod[k]; if(!m||!m.foto||!confirm("Remover a foto deste modelo?")) return;
-    DB.loja("loja_foto_salvar",{p_ref:m.foto,p_img:null}).catch(()=>{}); LOJA.mod[k]={...m,foto:""}; viewLoja(); }));
+  $("#lj_corpo").querySelectorAll("[data-fk]").forEach(b=>b.addEventListener("change",()=>{ if(b.files&&b.files.length) lojaAddFotos(b.dataset.fk,b.files); }));
+  $("#lj_corpo").querySelectorAll("[data-fm]").forEach(b=>b.addEventListener("click",()=>modalFotos(b.dataset.fm)));
   $("#lj_corpo").querySelectorAll("[data-dk]").forEach(b=>b.addEventListener("click",()=>{
     const k=b.dataset.dk, x=mods.find(m=>m.k===k);
     modal(`<h3>Texto do produto no site</h3><div class="hint">${esc(x.nome)} · ${esc(x.cor||"")}</div>
