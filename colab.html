@@ -488,7 +488,7 @@ function colChart({cats,series,h=170,labels=true}){
     t.textContent=b.dataset.tip; const r=b.getBoundingClientRect(); t.style.opacity=1;
     t.style.left=Math.min(innerWidth-t.offsetWidth-8,Math.max(8,r.left+r.width/2-t.offsetWidth/2))+"px"; t.style.top=(r.top-t.offsetHeight-8)+"px";});
 })();
-const payIcon=p=>({"Pix":"#1f9d63","Dinheiro":"#c07c00","Cartão crédito":"#e0242b","Cartão débito":"#3257c5","Desconto em folha":"#7a4cc2","Vale-troca":"#0e8a8a"}[p]||"#6f6a60");
+const payIcon=p=>({"Pix":"#1f9d63","Dinheiro":"#c07c00","Cartão crédito":"#e0242b","Cartão débito":"#3257c5","Desconto em folha":"#7a4cc2","Vale-troca":"#0e8a8a","Cashback":"#b8860b"}[p]||"#6f6a60");
 
 function toast(msg){const t=$("#toast");t.textContent=msg;t.classList.add("show");clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove("show"),2200);}
 
@@ -523,6 +523,7 @@ const NAV=[
   {id:"caixa",label:"Caixa",icon:'<rect x="2" y="7" width="20" height="13" rx="2"/><path d="M6 7V4h12v3M2 12h20M10 16h4"/>'},
   {id:"vendas",label:"Vendas",icon:'<path d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13 5.4 5M7 13l-2.3 4.6A1 1 0 0 0 5.6 19H17M7 13h10"/><circle cx="9" cy="21" r="1"/><circle cx="18" cy="21" r="1"/>'},
   {id:"trocas",label:"Trocas / Devoluções",icon:'<path d="M3 7h13l-3-3M21 17H8l3 3"/>'},
+  {id:"clientes",label:"Clientes / Cashback",icon:'<circle cx="9" cy="8" r="4"/><path d="M2 21v-2a4 4 0 0 1 4-4h6a4 4 0 0 1 4 4v2"/><circle cx="18" cy="15" r="3"/><path d="M18 13.5v3M16.5 15h3"/>'},
   {id:"estoque",label:"Estoque",icon:'<path d="M21 16V8a2 2 0 0 0-1-1.7l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.7l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="m3.3 7 8.7 5 8.7-5M12 22V12"/>'},
   {id:"inventario",label:"Inventário",icon:'<path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="m9 14 2 2 4-4"/>'},
   {id:"importar",label:"Importar nota",icon:'<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M12 11v6M9 14l3 3 3-3"/>'},
@@ -557,10 +558,10 @@ $("#theme").addEventListener("click",()=>{
 /* ---------------- VIEWS ---------------- */
 function route(){
   if(NAV.some(i=>i.id===current&&i.admin)&&SESSION.role!=="admin") current="dash"; // abas só do administrador
-  const titles={dash:"Painel",pdv:"Nova venda",vendas:"Vendas & Caixa",estoque:"Estoque",entradas:"Relatório de entradas",importar:"Importar nota / cupom",inventario:"Inventário",despesas:"Despesas",fech:"Fechamento do mês",comissao:"Comissão",saidas:"Condicional e costureira",folha:"Vendas para funcionários — desconto em folha",trocas:"Trocas e devoluções",caixa:"Caixa — abertura e fechamento",conta:SESSION.role==="admin"?"Painel de controle — usuários":"Minha conta"};
+  const titles={dash:"Painel",pdv:"Nova venda",vendas:"Vendas & Caixa",estoque:"Estoque",entradas:"Relatório de entradas",importar:"Importar nota / cupom",inventario:"Inventário",despesas:"Despesas",fech:"Fechamento do mês",comissao:"Comissão",saidas:"Condicional e costureira",folha:"Vendas para funcionários — desconto em folha",trocas:"Trocas e devoluções",clientes:"Clientes e cashback",caixa:"Caixa — abertura e fechamento",conta:SESSION.role==="admin"?"Painel de controle — usuários":"Minha conta"};
   $("#pageTitle").textContent=titles[current];
   $("#topExtra").innerHTML="";
-  ({dash:viewDash,pdv:viewPDV,importar:viewImportar,vendas:viewVendas,estoque:viewEstoque,entradas:viewEntradas,inventario:viewInventario,despesas:viewDespesas,fech:viewFech,comissao:viewComissao,saidas:viewSaidas,folha:viewFolha,trocas:viewTrocas,caixa:viewCaixa,conta:viewConta}[current])();
+  ({dash:viewDash,pdv:viewPDV,importar:viewImportar,vendas:viewVendas,estoque:viewEstoque,entradas:viewEntradas,inventario:viewInventario,despesas:viewDespesas,fech:viewFech,comissao:viewComissao,saidas:viewSaidas,folha:viewFolha,trocas:viewTrocas,clientes:viewClientes,caixa:viewCaixa,conta:viewConta}[current])();
 }
 
 let DASH_ANO=MES_ATUAL.slice(0,4), DASH_DIA="g";
@@ -791,7 +792,7 @@ function viewVendas(){
       <thead><tr><th>Data</th><th>Descrição</th><th>Categoria</th><th>Vendedor</th><th>Pagamento</th><th>Tipo</th><th class="num">Valor</th></tr></thead>
       <tbody>${linhas.length?linhas.map(({v,d})=>d?linhaDev(d):`<tr>
         <td class="tnum" style="white-space:nowrap">${fmtDate(v.dataISO)}${v.hora?`<div class="hint">${v.hora}</div>`:""}</td>
-        <td style="min-width:220px">${v.imp?`<span style="color:var(--muted);font-style:italic">${esc(v.desc)}</span> <span class="badge">importado</span>`:esc(v.desc)}${v.nova?`<div class="hint">baixou ${v.itens.reduce((s,i)=>s+i.qtd,0)} peça(s) do estoque</div>`:""}${v.vale?`<div class="hint" style="color:#0e8a8a">troca: ${brl(v.vale.valor)} em vale ${esc(v.vale.cod)} · compra de ${brl(v.valor+v.vale.valor)} · entrou ${brl(v.valor)}</div>`:""}</td>
+        <td style="min-width:220px">${v.imp?`<span style="color:var(--muted);font-style:italic">${esc(v.desc)}</span> <span class="badge">importado</span>`:esc(v.desc)}${v.nova?`<div class="hint">baixou ${v.itens.reduce((s,i)=>s+i.qtd,0)} peça(s) do estoque</div>`:""}${v.vale?`<div class="hint" style="color:#0e8a8a">troca: ${brl(v.vale.valor)} em vale ${esc(v.vale.cod)} · compra de ${brl(v.valor+v.vale.valor)} · entrou ${brl(v.valor)}</div>`:""}${v.cli||v.cbUsado?`<div class="hint" style="color:#b8860b">${v.cli?`cliente: ${esc(v.cli.nome||"")} ${esc(telFmt(v.cli.tel))}`:""}${v.cbUsado?` · usou ${brl(v.cbUsado)} de cashback`:""}${v.cbGanho?` · ganhou ${brl(v.cbGanho)}`:""}</div>`:""}</td>
         <td><div style="display:flex;gap:4px;flex-wrap:wrap">${(v.cats||[]).map(c=>`<span class="badge" style="${c===VF.cat?"background:var(--accent-soft);color:var(--accent)":""}">${esc(c)}</span>`).join("")}</div></td>
         <td>${esc(v.vend)}</td>
         <td><span class="pay"><span class="dot" style="background:${payIcon(v.pay)}"></span>${esc(v.pay)}</span></td>
@@ -1798,6 +1799,10 @@ function viewPDV(){
       </div></div>
       <div class="card"><div class="card-h"><h3>Pagamento</h3></div><div class="card-b" style="display:flex;flex-direction:column;gap:12px">
         <div class="formrow">
+          <div class="field"><label>Telefone do cliente</label><input class="inp" id="v_tel" inputmode="tel" placeholder="(49) 9…" value="${esc(PDV.pref&&PDV.pref.tel?telFmt(PDV.pref.tel):"")}"></div>
+          <div class="field"><label>Nome do cliente</label><input class="inp" id="v_cli" placeholder="Opcional" value="${esc(PDV.pref&&PDV.pref.nome||"")}"></div>
+        </div>
+        <div id="v_cliinfo" style="display:flex;flex-direction:column;gap:6px;font-size:12.5px"></div>
           <div class="field"><label>Data da venda</label><input class="inp" id="v_data" type="date" value="${hojeISO()}"></div>
           <div class="field"><label>Vendedor <span class="req">*</span></label><select class="inp" id="v_vend"><option value="" selected>Selecione…</option>${(isAdmin?vendedores:vendedores.filter(u=>u.id===SESSION.id)).map(u=>`<option>${esc(u.name)}</option>`).join("")}</select></div>
         </div>
@@ -1819,6 +1824,7 @@ function viewPDV(){
           <div style="display:flex;justify-content:space-between"><span style="color:var(--muted)">Subtotal</span><b class="tnum" id="v_sub">R$ 0,00</b></div>
           <div style="display:flex;justify-content:space-between"><span style="color:var(--muted)">Ajustes</span><b class="tnum" id="v_adj">—</b></div>
           <div id="v_valerow" hidden style="display:flex;justify-content:space-between"><span style="color:#0e8a8a">Vale-troca</span><b class="tnum" id="v_valeval" style="color:#0e8a8a"></b></div>
+          <div id="v_cbrow" style="display:none;justify-content:space-between"><span style="color:#b8860b">Cashback usado</span><b class="tnum" id="v_cbval" style="color:#b8860b"></b></div>
         </div>
         <div class="total-bar"><span id="v_totlbl">Total da venda</span><b class="tnum" id="v_total">R$ 0,00</b></div>
         <div style="display:flex;gap:9px"><button class="btn ghost" id="v_clear" style="flex:1">Limpar</button><button class="btn" id="v_save" style="flex:2">Finalizar venda</button></div>
@@ -1840,7 +1846,28 @@ function viewPDV(){
   // vale-troca abate do total; o que sobra é o que o cliente paga (e o que entra no faturamento)
   const valeSel=()=>{const id=+($("#v_vale")?.value||0); return id?DEVOLUCOES.find(d=>d.id===id)||null:null;};
   const valeUso=()=>{const d=valeSel(); return d?+Math.min(d.saldo,cheio()).toFixed(2):0;};
-  const total=()=>+(cheio()-valeUso()).toFixed(2);
+  // cliente (opcional): com telefone válido mostra o histórico, o cashback disponível e quanto vai ganhar
+  const telV=()=>telNum($("#v_tel").value), cliV=()=>telOk(telV())?clienteDe(telV()):null;
+  let usaCb=false;
+  const cbSaldoV=()=>telOk(telV())?cashSaldo(telV()):0;
+  const cbUso=()=>usaCb?+Math.min(cbSaldoV(),cheio()-valeUso()).toFixed(2):0;
+  const total=()=>+(cheio()-valeUso()-cbUso()).toFixed(2);
+  const cbGanho=()=>{ if(!telOk(telV())||$("#v_pay").value===PAG_FOLHA) return 0; return +(Math.max(0,total()-frete())*CONFIG.cashPct/100).toFixed(2); };
+  const drawCli=()=>{
+    const box=$("#v_cliinfo"), t=telV(); if(!box) return;
+    if(!t){ usaCb=false; box.innerHTML=""; return; }
+    if(!telOk(t)){ usaCb=false; box.innerHTML=`<span class="hint">Digite o telefone com DDD para registrar o cliente e o cashback.</span>`; return; }
+    const c=clienteDe(t), comp=c?comprasDe(t):[], sd=cashSaldo(t);
+    if(!sd) usaCb=false;
+    const venc=cashDisp(t).map(x=>x.validade).sort()[0];
+    box.innerHTML=`<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        ${c?`<span class="chip good">Cliente cadastrado · ${comp.length} compra(s)${comp.length?` · última ${fmtDate(comp[comp.length-1].dataISO)}`:""}</span>`:`<span class="chip info">Cliente novo</span>`}
+        ${sd?`<label style="display:flex;gap:6px;align-items:center;font-weight:700;color:#b8860b;cursor:pointer"><input type="checkbox" id="v_usacb" ${usaCb?"checked":""} style="width:16px;height:16px">Usar cashback ${brl(sd)}</label><span class="hint">vence ${fmtDate(venc)}</span>`:""}
+      </div>
+      <label style="display:flex;gap:6px;align-items:center;cursor:pointer"><input type="checkbox" id="v_promo" ${c&&c.promo?"checked":""} style="width:16px;height:16px">Cliente aceita receber promoções (WhatsApp)</label>
+      <span class="hint" id="v_cbganho"></span>`;
+    $("#v_usacb")?.addEventListener("change",e=>{usaCb=e.target.checked;draw();});
+  };
   // produto na venda: CATEGORIA › MARCA / descrição / cor + tamanho
   const caminho=p=>[p.cat,p.marca].filter(Boolean).map(x=>esc(String(x).toUpperCase())).join(` <span style="opacity:.6">›</span> `);
   const infoProd=(p,extra="")=>`<div class="pdv-prod">
@@ -1873,7 +1900,9 @@ function viewPDV(){
     const vu=valeUso();
     $("#v_valerow").hidden=!valeSel(); $("#v_valerow").style.display=valeSel()?"flex":"none";
     $("#v_valeval").textContent=valeSel()?`−${brl(vu)}${valeSel().saldo>vu?` (sobra ${brl(valeSel().saldo-vu)})`:""}`:"";
-    $("#v_totlbl").textContent=valeSel()?"A pagar":"Total da venda";
+    const cu=cbUso(); $("#v_cbrow").style.display=cu?"flex":"none"; $("#v_cbval").textContent=cu?`−${brl(cu)}`:"";
+    const g=cbGanho(); if($("#v_cbganho")) $("#v_cbganho").textContent=g?`Nesta compra o cliente ganha ${brl(g)} de cashback (${n0(CONFIG.cashPct)}%, válido por ${CONFIG.cashDias} dias).`:"";
+    $("#v_totlbl").textContent=valeSel()||cu?"A pagar":"Total da venda";
     $("#v_total").textContent=brl(total());
     document.querySelector(".card-h .hint").textContent=`${cart.reduce((s,i)=>s+i.qtd,0)} peça(s)`;
   };
@@ -1930,6 +1959,10 @@ function viewPDV(){
   $("#v_desc").addEventListener("input",()=>{descModo="brl";draw();});
   $("#v_frete").addEventListener("input",draw);
   $("#v_vale")?.addEventListener("change",draw);
+  $("#v_tel").addEventListener("input",()=>{ drawCli(); const c=cliV(); if(c&&c.nome&&!$("#v_cli").value.trim()) $("#v_cli").value=c.nome; draw(); });
+  $("#v_tel").addEventListener("blur",()=>{ const t=telV(); if(telOk(t)) $("#v_tel").value=telFmt(t); });
+  $("#v_pay").addEventListener("change",draw);
+  drawCli();
   $("#v_abrecx")?.addEventListener("click",()=>modalAbrirCaixa(()=>$("#v_cxbar")?.remove()));
   $("#v_clear").addEventListener("click",()=>{PDV.cart=[];PDV.ultima=null;viewPDV();});
   $("#v_ver")?.addEventListener("click",()=>{current="vendas";renderNav();route();});
@@ -1959,10 +1992,12 @@ function viewPDV(){
     // primeira venda do dia: abre o caixa e segue para a confirmação
     if(dataISO===hojeISO()&&!caixaAberto()) return modalAbrirCaixa(()=>{$("#v_cxbar")?.remove(); $("#v_save")?.click();},"Abra o caixa antes da primeira venda de hoje.");
     const valor=+total().toFixed(2), tipo=$("#v_tipo").value, fr=frete();
-    const vs=valeSel(), vu=valeUso();
-    // pago todo com vale: a forma de pagamento vira "Vale-troca"
-    const pay=vs&&valor===0?"Vale-troca":$("#v_pay").value, vend=$("#v_vend").value, pecas=cart.reduce((s,i)=>s+i.qtd,0), dsc=desc();
-    fin={pay,vale:vs&&vu?{id:vs.id,cod:vs.cod,valor:vu}:null};
+    const vs=valeSel(), vu=valeUso(), cu=cbUso();
+    const telC=telV(); if(telC&&!telOk(telC)){ $("#v_tel").focus(); return msg("Telefone do cliente incompleto: use DDD + número (ou deixe em branco)."); }
+    // pago todo com vale / cashback: a forma de pagamento vira "Vale-troca" ou "Cashback"
+    const pay=valor===0&&(vs||cu)?(vs&&vu?"Vale-troca":"Cashback"):$("#v_pay").value, vend=$("#v_vend").value, pecas=cart.reduce((s,i)=>s+i.qtd,0), dsc=desc();
+    fin={pay,vale:vs&&vu?{id:vs.id,cod:vs.cod,valor:vu}:null,cb:cu,ganho:pay===PAG_FOLHA?0:cbGanho(),
+      cli:telOk(telC)?{tel:telC,nome:$("#v_cli").value.trim(),promo:!!$("#v_promo")?.checked}:null};
     // confirmação final antes de registrar (resumo da venda)
     modal(`<h3>Confirmar venda?</h3>
       <div class="tw" style="border:1px solid var(--border);border-radius:10px;max-height:34vh;overflow:auto"><table style="min-width:0">
@@ -1973,8 +2008,11 @@ function viewPDV(){
         <div style="display:flex;justify-content:space-between"><span style="color:var(--muted)">Vendedor</span><b>${esc(vend)}</b></div>
         ${dsc||fr?`<div style="display:flex;justify-content:space-between"><span style="color:var(--muted)">Ajustes</span><b class="tnum">${dsc?"−"+brl(dsc):""}${dsc&&fr?" / ":""}${fr?"+"+brl(fr):""}</b></div>`:""}
         ${fin.vale?`<div style="display:flex;justify-content:space-between"><span style="color:#0e8a8a">Vale-troca ${esc(fin.vale.cod)} (${esc(vs.cliente)})</span><b class="tnum" style="color:#0e8a8a">−${brl(fin.vale.valor)}</b></div>`:""}
+        ${fin.cb?`<div style="display:flex;justify-content:space-between"><span style="color:#b8860b">Cashback usado</span><b class="tnum" style="color:#b8860b">−${brl(fin.cb)}</b></div>`:""}
+        ${fin.cli?`<div style="display:flex;justify-content:space-between"><span style="color:var(--muted)">Cliente</span><b>${esc(fin.cli.nome||"—")} · ${esc(telFmt(fin.cli.tel))}</b></div>`:""}
       </div>
-      <div class="total-bar"><span>${fin.vale?"A pagar":"Total"} · ${pecas} peça(s)</span><b class="tnum">${brl(valor)}</b></div>
+      <div class="total-bar"><span>${fin.vale||fin.cb?"A pagar":"Total"} · ${pecas} peça(s)</span><b class="tnum">${brl(valor)}</b></div>
+      ${fin.ganho?`<div class="hint" style="color:#b8860b;font-weight:700">O cliente ganha ${brl(fin.ganho)} de cashback para usar até ${fmtDate(somaDiasISO(hojeISO(),CONFIG.cashDias))}.</div>`:""}
       ${pay===PAG_FOLHA?`<div class="field"><label>Funcionário (desconto em folha) <span class="req">*</span></label><select class="inp" id="cf_func"><option value="">Selecione…</option>${USERS.filter(u=>u.ativo!==false).map(u=>`<option ${PDV.pref&&PDV.pref.func===u.name?"selected":""}>${esc(u.name)}</option>`).join("")}</select></div>`:""}
       <div class="err" id="cf_err" style="min-height:0"></div>
       <div class="row"><button class="btn ghost" data-close>Voltar</button><button class="btn" id="cf_ok">${pay==="Pix"?"Confirmar e gerar Pix":pay===PAG_FOLHA?"🔒 Confirmar (senha do administrador)":"Confirmar venda"}</button></div>`,"wide");
@@ -2002,10 +2040,17 @@ function viewPDV(){
     // valor = o que o cliente pagou; o vale usado fica guardado à parte (não entra de novo no faturamento)
     const v={id:VENDAS.length+1,desc:descr,valor,desconto:desc(),vend:$("#v_vend").value,pay:fin.pay,tipo,nova:true,dataISO,hora,
       itens:cart.map(i=>({sku:i.p.sku,qtd:i.qtd,preco:i.preco,cat:i.p.cat})),cats:[...new Set(cart.map(i=>i.p.cat))],...(func?{func}:{}),
-      ...(fin.vale?{vale:fin.vale}:{}),...(cx?{cx:cx.id}:{})};
+      ...(fin.vale?{vale:fin.vale}:{}),...(cx?{cx:cx.id}:{}),
+      ...(fin.cli?{cli:{tel:fin.cli.tel,nome:fin.cli.nome}}:{}),...(fin.cb?{cbUsado:fin.cb}:{}),...(fin.ganho?{cbGanho:fin.ganho}:{})};
     if(fin.vale){ const d=DEVOLUCOES.find(x=>x.id===fin.vale.id); if(d) d.saldo=Math.max(0,+(d.saldo-fin.vale.valor).toFixed(2)); }
+    if(fin.cli){
+      salvaCliente(fin.cli.tel,fin.cli.nome,fin.cli.promo);
+      if(fin.cb) usaCashback(fin.cli.tel,fin.cb);
+      if(fin.ganho) CASHBACKS.push({id:CASHBACKS.reduce((m,x)=>Math.max(m,x.id),0)+1,tel:fin.cli.tel,venda:v.id,data:dataISO,
+        valor:fin.ganho,saldo:fin.ganho,validade:somaDiasISO(dataISO,CONFIG.cashDias)});
+    }
     VENDAS.push(v); somaFaturamento(dataISO,valor,tipo,fr);
-    PDV={cart:[],ultima:v}; viewPDV(); toast(`Venda de ${brl(valor)} registrada. Estoque baixado.`);
+    PDV={cart:[],ultima:v}; viewPDV(); toast(`Venda de ${brl(valor)} registrada.${fin.ganho?` Cliente ganhou ${brl(fin.ganho)} de cashback.`:" Estoque baixado."}`);
   }
 }
 
@@ -2255,7 +2300,7 @@ function viewTrocas(){
   $("#view").querySelectorAll("[data-usar]").forEach(b=>b.addEventListener("click",()=>usarVale(+b.dataset.usar)));
 }
 // leva o vale para a Nova venda (já selecionado no pagamento)
-function usarVale(id){ PDV.pref={vale:id}; PDV.ultima=null; current="pdv"; renderNav(); route(); toast("Vale-troca selecionado. Bipe as peças novas."); }
+function usarVale(id){ const d=DEVOLUCOES.find(x=>x.id===id); PDV.pref={vale:id,tel:d&&d.tel||"",nome:d&&d.cliente||""}; PDV.ultima=null; current="pdv"; renderNav(); route(); toast("Vale-troca selecionado. Bipe as peças novas."); }
 // preço que o cliente pagou na última venda dessa peça (já com o desconto da venda); senão, o preço de etiqueta
 function precoPago(p){
   const v=VENDAS.slice().reverse().find(v=>(v.itens||[]).some(i=>i.sku===p.sku));
@@ -2269,7 +2314,7 @@ function modalNovaDevolucao(){
   modal(`<h3>Nova devolução / troca</h3>
     <div class="g g2">
       <div class="field"><label>Cliente <span class="req">*</span></label><input class="inp" id="dv_cli" placeholder="Nome"></div>
-      <div class="field"><label>Telefone</label><input class="inp" id="dv_tel" placeholder="(49) 9…" inputmode="tel"></div>
+      <div class="field"><label>Telefone <span class="req">*</span></label><input class="inp" id="dv_tel" placeholder="(49) 9…" inputmode="tel"></div>
     </div>
     <div class="g g2">
       <div class="field"><label>Motivo <span class="req">*</span></label><select class="inp" id="dv_mot">${MOTIVOS_DEV.map(m=>`<option>${m}</option>`).join("")}</select></div>
@@ -2313,17 +2358,19 @@ function modalNovaDevolucao(){
   const registrar=trocar=>{
     const cliente=$("#dv_cli").value.trim();
     if(!cliente) return err("Informe o nome do cliente.");
+    const tel=telNum($("#dv_tel").value);
+    if(!telOk(tel)){ $("#dv_tel").focus(); return err("Informe o telefone do cliente com DDD (ex.: 49 99999-9999)."); }
     if(!itens.length) return err("Bipe pelo menos uma peça devolvida.");
     const valor=totalDev(); if(!(valor>0)) return err("Informe o valor das peças devolvidas.");
-    const dados={cliente,contato:$("#dv_tel").value.trim(),motivo:$("#dv_mot").value,obs:$("#dv_obs").value.trim(),volta:$("#dv_est").checked};
+    const dados={cliente,contato:telFmt(tel),tel,motivo:$("#dv_mot").value,obs:$("#dv_obs").value.trim(),volta:$("#dv_est").checked};
     const fazer=()=>{
       if(dados.volta) itens.forEach(x=>{x.p.qtd+=x.qtd;});
       const id=DEVOLUCOES.reduce((m,x)=>Math.max(m,x.id),0)+1, cx=caixaAberto();
       const d={id,cod:destino==="vale"?"VT-"+String(id).padStart(4,"0"):"",data:hojeISO(),hora:horaAgora(),user:SESSION.name,
-        cliente:dados.cliente,contato:dados.contato,motivo:dados.motivo,obs:dados.obs,destino,estoque:dados.volta,
+        cliente:dados.cliente,contato:dados.contato,tel:dados.tel,motivo:dados.motivo,obs:dados.obs,destino,estoque:dados.volta,
         itens:itens.map(x=>({sku:x.p.sku,nome:x.p.nome,cor:corCurta(x.p),tam:x.p.tam,cat:x.p.cat,qtd:x.qtd,preco:x.preco})),
         valor,saldo:destino==="vale"?valor:0,...(destino==="dinheiro"&&!ADM()?{autor:"administrador"}:{}),...(cx?{cx:cx.id}:{})};
-      DEVOLUCOES.push(d); closeModal();
+      DEVOLUCOES.push(d); salvaCliente(dados.tel,dados.cliente); closeModal();
       if(trocar) return usarVale(d.id);
       DEVF="todas"; current="trocas"; renderNav(); route();
       toast(destino==="vale"?`Vale ${d.cod} de ${brl(valor)} para ${cliente}.`:`Devolução de ${brl(valor)} em dinheiro registrada.`);
@@ -2333,6 +2380,145 @@ function modalNovaDevolucao(){
   };
   $("#dv_ok").addEventListener("click",()=>registrar(false));
   $("#dv_trocar").addEventListener("click",()=>registrar(true));
+}
+
+/* ---------------- CLIENTES E CASHBACK ----------------
+   O cliente é identificado pelo telefone (informado na venda, opcional). Cada venda com telefone gera
+   cashback (CONFIG.cashPct % do valor pago, sem frete) que vale CONFIG.cashDias dias e é usado como pagamento.
+   Alterar o percentual ou a validade sempre pede a senha do administrador. */
+let CLIENTES=[], CASHBACKS=[], CONFIG={cashPct:3,cashDias:60};
+const telNum=s=>{let d=String(s||"").replace(/\D/g,""); if(d.length>11&&d.startsWith("55")) d=d.slice(2); return d;};
+const telOk=t=>/^\d{10,11}$/.test(t||"");
+const telFmt=t=>{t=telNum(t); return t.length===11?`(${t.slice(0,2)}) ${t.slice(2,7)}-${t.slice(7)}`:t.length===10?`(${t.slice(0,2)}) ${t.slice(2,6)}-${t.slice(6)}`:t;};
+const somaDiasISO=(iso,n)=>{const d=new Date(iso+"T12:00"); d.setDate(d.getDate()+n); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;};
+const clienteDe=tel=>CLIENTES.find(c=>c.tel===tel)||null;
+const comprasDe=tel=>VENDAS.filter(v=>v.cli&&v.cli.tel===tel).sort((a,b)=>a.dataISO.localeCompare(b.dataISO)||(a.hora||"").localeCompare(b.hora||""));
+const cashDisp=tel=>CASHBACKS.filter(c=>c.tel===tel&&c.saldo>0.009&&c.validade>=hojeISO());
+const cashSaldo=tel=>+cashDisp(tel).reduce((s,c)=>s+c.saldo,0).toFixed(2);
+// grava/atualiza o cliente; o "aceita promoções" só é ligado (desmarcar é feito na aba Clientes)
+function salvaCliente(tel,nome,promo){
+  if(!telOk(tel)) return null;
+  let c=clienteDe(tel);
+  if(!c){ c={tel,nome:nome||"",promo:!!promo,desde:hojeISO()}; CLIENTES.push(c); }
+  else { if(nome&&nome!==c.nome) c.nome=nome; if(promo) c.promo=true; }
+  return c;
+}
+// usa o cashback do mais antigo (que vence primeiro) para o mais novo
+function usaCashback(tel,valor){
+  let r=valor;
+  cashDisp(tel).sort((a,b)=>a.validade.localeCompare(b.validade)).forEach(c=>{ if(r<=0) return; const u=Math.min(c.saldo,r); c.saldo=+(c.saldo-u).toFixed(2); r=+(r-u).toFixed(2); });
+}
+let CLF={q:"",promo:false,cb:false};
+function clientesLista(){
+  const hoje=hojeISO();
+  return CLIENTES.map(c=>{ const comp=comprasDe(c.tel), disp=cashDisp(c.tel);
+    return {c,comp,n:comp.length,total:comp.reduce((s,v)=>s+v.valor+(v.vale?v.vale.valor:0)+(v.cbUsado||0),0),ult:comp.length?comp[comp.length-1].dataISO:"",
+      saldo:+disp.reduce((s,x)=>s+x.saldo,0).toFixed(2),vence:disp.map(x=>x.validade).sort()[0]||"",
+      vence7:disp.filter(x=>x.validade<=somaDiasISO(hoje,7)).reduce((s,x)=>s+x.saldo,0)}; });
+}
+function viewClientes(){
+  const isAdmin=ADM(), todos=clientesLista(), q=CLF.q.trim();
+  const lista=todos.filter(x=>(!q||busca([x.c.nome,x.c.tel,telFmt(x.c.tel)],q))&&(!CLF.promo||x.c.promo)&&(!CLF.cb||x.saldo>0))
+    .sort((a,b)=>(b.ult||"").localeCompare(a.ult||"")||String(a.c.nome).localeCompare(String(b.c.nome),"pt-BR"));
+  const aberto=todos.reduce((s,x)=>s+x.saldo,0), v7=todos.reduce((s,x)=>s+x.vence7,0);
+  $("#view").innerHTML=`
+  <div class="section">
+    <div class="tiles compact" style="margin-bottom:14px">
+      <div class="tile"><div class="lbl">Clientes cadastrados</div><div class="val tnum">${todos.length}</div><div class="sub">${todos.filter(x=>x.n).length} com compra</div></div>
+      <div class="tile"><div class="lbl"><span class="dot" style="background:var(--good)"></span>Aceitam promoções</div><div class="val tnum">${todos.filter(x=>x.c.promo).length}</div><div class="sub">podem receber mensagem</div></div>
+      <div class="tile"><div class="lbl"><span class="dot" style="background:#b8860b"></span>Cashback em aberto</div><div class="val tnum">${brl(aberto)}</div><div class="sub">${todos.filter(x=>x.saldo>0).length} cliente(s)</div></div>
+      <div class="tile"><div class="lbl"><span class="dot" style="background:var(--crit)"></span>Vence em 7 dias</div><div class="val tnum">${brl(v7)}</div><div class="sub">bom para chamar o cliente</div></div>
+    </div>
+    <div class="toolbar" style="flex-wrap:wrap;gap:10px">
+      <input class="inp" id="cl_q" placeholder="Buscar por nome ou telefone" value="${esc(CLF.q)}" style="flex:1;min-width:220px">
+      <label style="display:flex;gap:6px;align-items:center;font-size:13px;cursor:pointer"><input type="checkbox" id="cl_promo" ${CLF.promo?"checked":""} style="width:16px;height:16px">Só quem aceita promoções</label>
+      <label style="display:flex;gap:6px;align-items:center;font-size:13px;cursor:pointer"><input type="checkbox" id="cl_cb" ${CLF.cb?"checked":""} style="width:16px;height:16px">Só com cashback</label>
+      <button class="btn ghost" id="cl_novo">+ Cliente</button>
+      ${isAdmin?`<button class="btn ghost" id="cl_xls">Exportar Excel</button><button class="btn ghost" id="cl_copy">Copiar telefones</button>`:""}
+      <button class="btn ghost" id="cl_cfg" title="Alterar exige a senha do administrador">🔒 Cashback: ${n0(CONFIG.cashPct)}% · ${CONFIG.cashDias} dias</button>
+    </div>
+    <div class="card"><div class="card-b pad0"><div class="tw"><table>
+      <thead><tr><th>Cliente</th><th class="num">Compras</th><th class="num">Total gasto</th><th>Última compra</th><th class="num">Cashback</th><th>Promoções</th><th></th></tr></thead>
+      <tbody>${lista.length?lista.map(x=>`<tr>
+        <td><b>${esc(x.c.nome||"(sem nome)")}</b><div class="hint">${esc(telFmt(x.c.tel))}</div></td>
+        <td class="num tnum">${x.n}</td><td class="num tnum">${brl(x.total)}</td>
+        <td class="tnum">${x.ult?fmtDate(x.ult):"—"}</td>
+        <td class="num tnum">${x.saldo?`<b style="color:#b8860b">${brl(x.saldo)}</b><div class="hint" ${x.vence7?'style="color:var(--crit);font-weight:700"':""}>vence ${fmtDate(x.vence)}</div>`:"—"}</td>
+        <td>${x.c.promo?`<span class="chip good">Sim</span>`:`<span class="chip">Não</span>`}</td>
+        <td style="text-align:right;white-space:nowrap"><a class="btn ghost sm" href="https://wa.me/55${x.c.tel}" target="_blank" rel="noopener">WhatsApp</a> <button class="btn sm" data-cl="${x.c.tel}">Histórico</button></td></tr>`).join("")
+        :`<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:24px">${todos.length?"Nenhum cliente com esses filtros.":"Nenhum cliente ainda. Informe o telefone na Nova venda para começar o histórico."}</td></tr>`}</tbody>
+    </table></div></div></div>
+    <div class="hint" style="margin-top:10px">Envie promoções só para quem aceitou receber (LGPD). O cashback é calculado sobre o valor pago, sem frete, e não vale em desconto em folha.</div>
+  </div>`;
+  $("#cl_q").addEventListener("input",e=>{CLF.q=e.target.value;rerender(viewClientes);});
+  $("#cl_promo").addEventListener("change",e=>{CLF.promo=e.target.checked;viewClientes();});
+  $("#cl_cb").addEventListener("change",e=>{CLF.cb=e.target.checked;viewClientes();});
+  $("#cl_novo").addEventListener("click",()=>modalCliente(null));
+  $("#cl_cfg").addEventListener("click",modalConfigCashback);
+  $("#cl_xls")?.addEventListener("click",()=>excelClientes(lista));
+  $("#cl_copy")?.addEventListener("click",async()=>{
+    const tels=lista.filter(x=>x.c.promo).map(x=>"55"+x.c.tel);
+    if(!tels.length) return toast("Nenhum cliente da lista aceitou receber promoções.");
+    try{ await navigator.clipboard.writeText(tels.join("\n")); toast(`${tels.length} telefone(s) copiados (só quem aceita promoções).`); }catch(e){ toast("Não foi possível copiar."); }
+  });
+  $("#view").querySelectorAll("[data-cl]").forEach(b=>b.addEventListener("click",()=>modalCliente(b.dataset.cl)));
+}
+function modalCliente(tel){
+  const c=tel?clienteDe(tel):null, comp=c?comprasDe(c.tel).slice().reverse():[], cbs=c?CASHBACKS.filter(x=>x.tel===c.tel).slice().sort((a,b)=>b.data.localeCompare(a.data)):[];
+  const devs=c?DEVOLUCOES.filter(d=>d.tel===c.tel):[], hoje=hojeISO();
+  modal(`<h3>${c?esc(c.nome||"Cliente"):"Novo cliente"}</h3>
+    <div class="g g2">
+      <div class="field"><label>Telefone <span class="req">*</span></label><input class="inp" id="cm_tel" inputmode="tel" value="${c?esc(telFmt(c.tel)):""}" ${c?"readonly":""}></div>
+      <div class="field"><label>Nome</label><input class="inp" id="cm_nome" value="${c?esc(c.nome||""):""}"></div>
+    </div>
+    <label style="display:flex;gap:6px;align-items:center;font-size:13px;cursor:pointer"><input type="checkbox" id="cm_promo" ${c&&c.promo?"checked":""} style="width:16px;height:16px">Aceita receber promoções (WhatsApp)</label>
+    ${c?`<div class="tw" style="border:1px solid var(--border);border-radius:10px;max-height:30vh;overflow:auto"><table style="min-width:0">
+      <thead><tr><th>Data</th><th>Compra</th><th class="num">Pago</th><th class="num">Cashback</th></tr></thead>
+      <tbody>${comp.length?comp.map(v=>`<tr><td class="tnum">${fmtDate(v.dataISO)}</td><td style="font-size:12px">${esc(v.desc)}<div class="hint">${esc(v.pay)} · ${esc(v.vend)}</div></td>
+        <td class="num tnum">${brl(v.valor)}</td><td class="num tnum" style="font-size:12px">${v.cbGanho?`<span style="color:var(--good)">+${brl(v.cbGanho)}</span>`:""}${v.cbUsado?`<div style="color:#b8860b">−${brl(v.cbUsado)}</div>`:""}</td></tr>`).join("")
+        :`<tr><td colspan="4" style="text-align:center;color:var(--muted)">Sem compras registradas.</td></tr>`}</tbody></table></div>
+      ${devs.length?`<div class="hint">${devs.length} devolução(ões): ${devs.map(d=>`${fmtDate(d.data)} ${brl(d.valor)}`).join(" · ")}</div>`:""}
+      ${cbs.length?`<div class="hint">Cashback: ${cbs.map(x=>`${brl(x.valor)} de ${fmtDate(x.data)} → ${x.saldo>0.009?(x.validade<hoje?`<span style="color:var(--crit)">venceu ${fmtDate(x.validade)}</span>`:`saldo ${brl(x.saldo)} até ${fmtDate(x.validade)}`):"usado"}`).join(" · ")}</div>`:""}`:""}
+    <div class="err" id="cm_err"></div>
+    <div class="row"><button class="btn ghost" data-close>Fechar</button><button class="btn" id="cm_ok">Salvar</button></div>`,"wide");
+  $("#cm_ok").addEventListener("click",()=>{
+    const t=c?c.tel:telNum($("#cm_tel").value);
+    if(!telOk(t)) return $("#cm_err").textContent="Informe o telefone com DDD.";
+    if(!c&&clienteDe(t)) return $("#cm_err").textContent="Já existe cliente com esse telefone.";
+    const x=salvaCliente(t,$("#cm_nome").value.trim(),false); x.nome=$("#cm_nome").value.trim(); x.promo=$("#cm_promo").checked;
+    closeModal(); viewClientes(); toast("Cliente salvo.");
+  });
+}
+function modalConfigCashback(){
+  askAdminPw(()=>{
+    modal(`<h3>Configurar cashback</h3>
+      <div class="g g2">
+        <div class="field"><label>Percentual sobre a venda (%)</label><input class="inp" id="cf_pct" inputmode="decimal" value="${String(CONFIG.cashPct).replace(".",",")}"></div>
+        <div class="field"><label>Validade (dias)</label><input class="inp" id="cf_dias" type="number" min="1" value="${CONFIG.cashDias}"></div>
+      </div>
+      <div class="hint">Vale para as próximas vendas. O cashback já gerado mantém o valor e a validade de quando foi ganho. Use 0% para desligar.</div>
+      <div class="err" id="cfc_err"></div>
+      <div class="row"><button class="btn ghost" data-close>Cancelar</button><button class="btn" id="cfc_ok">Salvar</button></div>`);
+    $("#cfc_ok").addEventListener("click",()=>{
+      const p=parseNum($("#cf_pct").value), d=parseInt($("#cf_dias").value);
+      if(!(p>=0&&p<=50)) return $("#cfc_err").textContent="Percentual entre 0 e 50.";
+      if(!(d>=1&&d<=730)) return $("#cfc_err").textContent="Validade entre 1 e 730 dias.";
+      CONFIG={...CONFIG,cashPct:+p.toFixed(2),cashDias:d}; closeModal(); viewClientes(); toast(`Cashback: ${n0(CONFIG.cashPct)}% por ${d} dias.`);
+    });
+  },"Alterar o percentual ou a validade do cashback exige a senha do administrador.");
+}
+async function excelClientes(lista){
+  if(!lista.length) return toast("Nada para exportar com esses filtros.");
+  let X; try{ X=await carregaXlsx(); }catch(e){ return toast("Não foi possível gerar o Excel. Verifique a internet."); }
+  const cab=["Nome","Telefone","WhatsApp","Aceita promoções","Compras","Total gasto (R$)","Última compra","Cashback (R$)","Cashback vence","Cliente desde"];
+  const linhas=lista.map(x=>[x.c.nome||"",telFmt(x.c.tel),"55"+x.c.tel,x.c.promo?"Sim":"Não",x.n,+x.total.toFixed(2),x.ult?fmtDate(x.ult):"",x.saldo,x.vence?fmtDate(x.vence):"",x.c.desde?fmtDate(x.c.desde):""]);
+  const ws=X.utils.aoa_to_sheet([cab,...linhas]);
+  for(let r=1;r<=linhas.length;r++){ const w=ws[X.utils.encode_cell({r,c:2})]; if(w){w.t="s";w.v=String(w.v);}
+    [5,7].forEach(ci=>{const cel=ws[X.utils.encode_cell({r,c:ci})]; if(cel&&cel.t==="n") cel.z='"R$" #,##0.00';}); }
+  ws["!cols"]=cab.map((c,i)=>({wch:i===0?28:Math.max(c.length+2,14)}));
+  const wb=X.utils.book_new(); X.utils.book_append_sheet(wb,ws,"Clientes");
+  X.writeFile(wb,`clientes-colab-${hojeISO()}.xlsx`);
+  toast(`Planilha baixada: ${lista.length} cliente(s).`);
 }
 
 /* ---------------- CAIXA ----------------
@@ -3256,6 +3442,9 @@ const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
     saidas:    [()=>SAIDAS,      v=>{SAIDAS=v;}], // condicional / costureira
     devolucoes:[()=>DEVOLUCOES,  v=>{DEVOLUCOES=v;}], // trocas / vale-troca
     caixas:    [()=>CAIXAS,      v=>{CAIXAS=v;}],     // abertura e fechamento de caixa
+    clientes:  [()=>CLIENTES,    v=>{CLIENTES=v;}],   // cadastro de clientes (telefone)
+    cashbacks: [()=>CASHBACKS,   v=>{CASHBACKS=v;}],  // créditos de cashback por venda
+    config:    [()=>CONFIG,      v=>{CONFIG=Object.assign({cashPct:3,cashDias:60},v);}],
   };
   const saved={}, verLocal={};
   for(const k in KEYS) saved[k]=JSON.stringify(KEYS[k][0]());
