@@ -574,7 +574,7 @@ function dashGraficos(){
   // séries por ano: cor fixa por ano (mais antigo → azul, mais recente → vermelho da marca)
   const CORES=["#8a94a6","#3257c5","var(--accent)"];
   const corAno=a=>CORES[Math.max(0,CORES.length-anos.length+anos.indexOf(a))];
-  const mesAtualLbl=`${MESES[+MES_ATUAL.slice(5,7)-1]}/${MES_ATUAL.slice(0,4)}`;
+  const mesAtualLbl=`${MESES[+hojeISO().slice(5,7)-1]}/${hojeISO().slice(0,4)}`;
   return `
     <div class="grid2" style="grid-template-columns:1fr 2fr">
       <div class="card"><div class="card-h"><h3>Faturamento por ano</h3></div>
@@ -590,16 +590,41 @@ function dashGraficos(){
           values:MESES.map((_,i)=>fm[`${a}-${String(i+1).padStart(2,"0")}`]||0)})),h:170})}
         <div class="hint" style="margin-top:8px">${mesAtualLbl} ainda em andamento. Meses anteriores a ${mesAtualLbl} são valores de exemplo — troque pelos números reais da loja. Passe o mouse nas barras para ver o valor.</div></div></div>`;
 }
+// período do Painel (ano / mês / dia); começa sempre no mês de hoje
+const dfHoje=()=>({ano:hojeISO().slice(0,4),mes:hojeISO().slice(5,7),dia:""});
+let DASHF=dfHoje();
+const histMeses=f=>f.dia?[]:Object.keys(HIST).filter(ym=>(!f.ano||ym.startsWith(f.ano))&&(!f.mes||ym.slice(5,7)===f.mes));
+// faturamento do período: soma das vendas; meses sem nenhuma venda lançada usam o valor do histórico
+function fatPeriodo(f){
+  const vs=VENDAS.filter(v=>dfMatch(v.dataISO,f));
+  const hist=histMeses(f).filter(ym=>!VENDAS.some(v=>String(v.dataISO||"").startsWith(ym))).reduce((s,ym)=>s+(+HIST[ym]||0),0);
+  return {vs,tot:+(vs.reduce((s,v)=>s+v.valor,0)+hist).toFixed(2),hist};
+}
+const dfNome=f=>f.dia?`${+f.dia} de ${MESES_L[+f.mes-1]||""}${f.ano?" de "+f.ano:""}`:f.mes?`${MESES_L[+f.mes-1]}${f.ano?"/"+f.ano:""}`:f.ano?`ano de ${f.ano}`:"todo o período";
 function viewDash(){
+  const F=DASHF, P=fatPeriodo(F), nomeP=dfNome(F);
   const totalEstoque=ESTOQUE.reduce((s,p)=>s+p.qtd*p.custo,0);
   const criticos=ESTOQUE.filter(p=>p.qtd<=p.min).length;
-  const diasAtivos=DIARIO.filter(v=>v>0).length;
-  const VD=VENDAS.filter(v=>!v.imp), ticket=VD.reduce((s,v)=>s+v.valor,0)/Math.max(1,VD.length);
-  const despMes=despesasMes(), saldo=MES.faturamento-despMes;
+  const diasAtivos=new Set(P.vs.filter(v=>v.valor>0).map(v=>v.dataISO)).size;
+  const VD=P.vs.filter(v=>!v.imp), ticket=VD.reduce((s,v)=>s+v.valor,0)/Math.max(1,VD.length);
+  const despMes=DESPESAS.filter(d=>dfMatch(d.data,F)).reduce((s,d)=>s+d.valor,0), saldo=P.tot-despMes;
   const isAdmin=SESSION.role==="admin";
   const estoqueVenda=ESTOQUE.reduce((s,p)=>s+Math.max(0,p.qtd)*p.preco,0), pecasEst=ESTOQUE.reduce((s,p)=>s+Math.max(0,p.qtd),0);
-  // vendas do mês: por marca (a partir dos itens bipados) e por forma de pagamento
-  const VM=VENDAS.filter(v=>String(v.dataISO||"").startsWith(MES_ATUAL));
+  // vendas do período: por marca (a partir dos itens bipados) e por forma de pagamento
+  const VM=P.vs;
+  // gráfico: com mês escolhido mostra os dias; sem mês, os meses do ano
+  const anoG=F.ano||hojeISO().slice(0,4);
+  const diario=F.mes?Array.from({length:new Date(+anoG,+F.mes,0).getDate()},(_,i)=>{const iso=`${anoG}-${F.mes}-${String(i+1).padStart(2,"0")}`;
+    return +VENDAS.filter(v=>v.dataISO===iso).reduce((s,v)=>s+v.valor,0).toFixed(2);}):null;
+  const mensal=F.mes?null:MESES.map((_,i)=>fatPeriodo({ano:anoG,mes:String(i+1).padStart(2,"0"),dia:""}).tot);
+  const porTipo={}; VM.forEach(v=>{const k=v.tipo==="Online"||v.tipo==="Loja física"?v.tipo:"Não informado"; porTipo[k]=(porTipo[k]||0)+v.valor;});
+  const totTipo=Object.values(porTipo).reduce((a,b)=>a+b,0);
+  const ehMesPlanilha=!F.dia&&`${F.ano}-${F.mes}`===MES_ATUAL;
+  // peças vendidas por categoria: itens bipados; vendas antigas usam as colunas da planilha
+  const pecasCat={}; const somaCat=(c,n)=>{if(n>0)pecasCat[c]=(pecasCat[c]||0)+n;};
+  VM.forEach(v=>{ if(v.itens&&v.itens.length) v.itens.forEach(it=>somaCat(it.cat||"Outros",it.qtd));
+    else { somaCat("Tênis",v.tenis||0); somaCat("Calças",(v.jogger||0)+(v.cargo||0)); somaCat("Camisetas",(v.over||0)+(v.long||0)+(v.trad||0)); } });
+  const isosDash=[...VENDAS.map(v=>v.dataISO),...Object.keys(HIST).map(ym=>ym+"-01"),hojeISO()].filter(Boolean);
   const marcaDe=sku=>{const p=ESTOQUE.find(x=>x.sku===sku); return (p&&String(p.marca||"").trim())||"Sem marca";};
   // valor por marca proporcional ao que foi pago (já com desconto/frete), para o total bater com o faturamento
   const porMarca={}; let semItens=0, semItensN=0;
@@ -614,9 +639,16 @@ function viewDash(){
   const totPag=pags.reduce((s,[,o])=>s+o.valor,0);
   $("#view").innerHTML=`
   <div class="section">
+    <div class="card" style="margin-bottom:14px"><div class="card-b" style="padding:10px 14px">
+      <div class="datebar" style="align-items:flex-end">
+        ${dfHTML("dsh",F,isosDash)}
+        <button class="btn ghost sm" id="dsh_hoje" type="button">Hoje</button>
+        <button class="btn ghost sm" id="dsh_mes" type="button">Este mês</button>
+        <span class="chip info" style="margin-left:auto">Mostrando: ${esc(nomeP)}</span>
+      </div></div></div>
     <div class="tiles compact">
-      <div class="tile"><div class="lbl"><span class="dot" style="background:var(--accent)"></span>Faturamento do mês</div>
-        <div class="val tnum">${brl(MES.faturamento)}</div><div class="sub">${diasAtivos} dias com venda</div></div>
+      <div class="tile"><div class="lbl"><span class="dot" style="background:var(--accent)"></span>Faturamento${F.dia?" do dia":F.mes?" do mês":F.ano?" do ano":""}</div>
+        <div class="val tnum">${brl(P.tot)}</div><div class="sub">${diasAtivos} dia(s) com venda${P.hist?` · ${brl(P.hist)} do histórico`:""}</div></div>
       <div class="tile"><div class="lbl"><span class="dot" style="background:var(--good)"></span>Saldo (fat. − despesas)</div>
         <div class="val tnum">${brl(saldo)}</div><div class="sub">Despesas: ${brl(despMes)}</div></div>
       <div class="tile"><div class="lbl"><span class="dot" style="background:#3257c5"></span>Ticket médio</div>
@@ -629,43 +661,45 @@ function viewDash(){
 
     <div class="grid2">
       <div class="card">
-        <div class="card-h"><h3>Vendas por marca — mês</h3><span class="chip good">${brl(totMarcas)}</span></div>
+        <div class="card-h"><h3>Vendas por marca</h3><span class="chip good">${brl(totMarcas)}</span></div>
         <div class="card-b pad0">${marcas.length||semItens?`<div class="tw" style="max-height:300px;overflow:auto"><table style="min-width:0">
           <thead><tr><th>Marca</th><th class="num">Peças</th><th class="num">Valor</th><th style="width:30%"></th></tr></thead>
           <tbody>${[...marcas.map(([m,o])=>[m,o,false]),...(semItens?[["Sem detalhe de produto",{pecas:null,valor:semItens},true]]:[])].map(([m,o,sd])=>{const pct=totMarcas?Math.round(o.valor/totMarcas*100):0; return `<tr${sd?' style="color:var(--muted)"':""}>
             <td>${sd?`<span title="${semItensN} venda(s)/fechamento(s) sem os produtos registrados (planilha ou lançamento sem bipar)">${esc(m)} <span class="hint">· ${semItensN}</span></span>`:`<b>${esc(m)}</b>`}</td>
             <td class="num tnum">${o.pecas??"—"}</td><td class="num tnum">${brl(o.valor)}</td>
             <td><div style="display:flex;align-items:center;gap:6px"><div style="flex:1;height:7px;background:var(--surface-2);border-radius:999px;overflow:hidden"><div style="height:100%;width:${pct}%;background:${sd?"#8a94a6":"var(--accent)"}"></div></div><span class="hint tnum" style="min-width:30px;text-align:right">${pct}%</span></div></td></tr>`;}).join("")}</tbody>
-          <tfoot><tr><td>Total do mês</td><td class="num tnum">${marcas.reduce((s,[,o])=>s+o.pecas,0)}</td><td class="num tnum">${brl(totMarcas)}</td><td></td></tr></tfoot></table></div>`
-          :`<div class="infobox" style="margin:14px;text-align:center;color:var(--muted)">Nenhuma venda neste mês.</div>`}
+          <tfoot><tr><td>Total do período</td><td class="num tnum">${marcas.reduce((s,[,o])=>s+o.pecas,0)}</td><td class="num tnum">${brl(totMarcas)}</td><td></td></tr></tfoot></table></div>`
+          :`<div class="infobox" style="margin:14px;text-align:center;color:var(--muted)">Nenhuma venda lançada neste período.</div>`}
           <div class="hint" style="padding:8px 14px 12px">A marca vem dos produtos bipados na Nova venda; o valor já considera desconto e frete. ${semItens?"“Sem detalhe de produto” são vendas sem os itens registrados (fechamentos da planilha ou lançadas sem bipar).":""}</div></div>
       </div>
       <div class="card">
-        <div class="card-h"><h3>Por forma de pagamento — mês</h3><span class="chip good">${brl(totPag)}</span></div>
+        <div class="card-h"><h3>Por forma de pagamento</h3><span class="chip good">${brl(totPag)}</span></div>
         <div class="card-b" style="display:flex;flex-direction:column;gap:12px">
           ${pags.length?pags.map(([k,o])=>splitRow(`${esc(k)} <span class="hint" style="font-weight:500">· ${o.n} venda(s)</span>`,o.valor,totPag,k==="Não informado"?"#8a94a6":payIcon(k))).join("")
-            :`<div class="infobox" style="text-align:center;color:var(--muted)">Nenhuma venda neste mês.</div>`}
+            :`<div class="infobox" style="text-align:center;color:var(--muted)">Nenhuma venda lançada neste período.</div>`}
         </div>
       </div>
     </div>
 
     <div class="grid2">
       <div class="card">
-        <div class="card-h"><h3>Faturamento diário — Outubro</h3>
+        ${diario?`<div class="card-h"><h3>Faturamento diário — ${MESES_L[+F.mes-1]}/${anoG}</h3>
           <div class="sizes" id="dDiaModo"><button type="button" data-m="g" class="${DASH_DIA==="g"?"on":""}">Gráfico</button><button type="button" data-m="t" class="${DASH_DIA==="t"?"on":""}">Tabela</button></div>
-          <span class="chip good">${brl(MES.faturamento)}</span></div>
-        <div class="card-b ${DASH_DIA==="t"?"pad0":""}">${DASH_DIA==="g"?barChart(DIARIO):`<div class="tw" style="max-height:300px;overflow:auto"><table style="min-width:0">
-          <thead><tr><th>Dia</th><th class="num">Valor</th><th>Dia</th><th class="num">Valor</th></tr></thead><tbody>${twoCol(DIARIO)}</tbody></table></div>`}</div>
+          <span class="chip good">${brl(diario.reduce((a,b)=>a+b,0))}</span></div>
+        <div class="card-b ${DASH_DIA==="t"?"pad0":""}">${DASH_DIA==="g"?barChart(diario):`<div class="tw" style="max-height:300px;overflow:auto"><table style="min-width:0">
+          <thead><tr><th>Dia</th><th class="num">Valor</th><th>Dia</th><th class="num">Valor</th></tr></thead><tbody>${twoCol(diario,F.mes)}</tbody></table></div>`}</div>`
+        :`<div class="card-h"><h3>Faturamento por mês — ${anoG}</h3><span class="chip good">${brl(mensal.reduce((a,b)=>a+b,0))}</span></div>
+        <div class="card-b">${colChart({cats:MESES,series:[{name:anoG,color:"var(--accent)",values:mensal,tipLbl:i=>`${MESES_L[i]}/${anoG}`}],h:170})}</div>`}
       </div>
       <div class="card">
         <div class="card-h"><h3>Por tipo de venda</h3></div>
         <div class="card-b" style="display:flex;flex-direction:column;gap:14px">
-          ${splitRow("Loja física",MES.lojaFisica,MES.lojaFisica+MES.online,"var(--accent)")}
-          ${splitRow("Online",MES.online,MES.lojaFisica+MES.online,"#3257c5")}
-          <div style="border-top:1px solid var(--border);padding-top:12px;display:flex;flex-direction:column;gap:9px">
+          ${totTipo?["Loja física","Online","Não informado"].filter(k=>porTipo[k]).map(k=>splitRow(k,porTipo[k],totTipo,k==="Online"?"#3257c5":k==="Loja física"?"var(--accent)":"#8a94a6")).join("")
+            :`<div class="infobox" style="text-align:center;color:var(--muted)">Nenhuma venda lançada neste período.</div>`}
+          ${ehMesPlanilha?`<div style="border-top:1px solid var(--border);padding-top:12px;display:flex;flex-direction:column;gap:9px">
             ${miniStat("Base p/ comissão (promocionais ÷2)",brl(MES.promocional))}
             ${miniStat("Fretes no mês",brl(MES.fretes))}
-          </div>
+          </div>`:""}
         </div>
       </div>
     </div>
@@ -673,15 +707,17 @@ function viewDash(){
     ${dashGraficos()}
 
     <div class="card" style="margin-top:16px">
-      <div class="card-h"><h3>Peças vendidas no mês</h3></div>
-      <div class="card-b"><div class="tiles" style="grid-template-columns:repeat(auto-fit,minmax(120px,1fr))">
-        ${pieceTile("Tênis",MES.tenis)}${pieceTile("Jogger",MES.jogger)}${pieceTile("Cargo",MES.cargo)}
-        ${pieceTile("Over",MES.over)}${pieceTile("Long",MES.long)}${pieceTile("Tradicional",MES.trad)}
-      </div></div>
+      <div class="card-h"><h3>Peças vendidas — ${esc(nomeP)}</h3></div>
+      <div class="card-b">${Object.keys(pecasCat).length?`<div class="tiles" style="grid-template-columns:repeat(auto-fit,minmax(120px,1fr))">
+        ${Object.entries(pecasCat).sort((a,b)=>b[1]-a[1]).map(([c,n])=>pieceTile(esc(c),n)).join("")}
+      </div>`:`<div class="infobox" style="text-align:center;color:var(--muted)">Nenhuma peça vendida neste período.</div>`}</div>
     </div>
   </div>`;
+  dfBind("dsh",()=>DASHF,viewDash);
+  $("#dsh_hoje").addEventListener("click",()=>{DASHF={...dfHoje(),dia:hojeISO().slice(8,10)};viewDash();});
+  $("#dsh_mes").addEventListener("click",()=>{DASHF=dfHoje();viewDash();});
   $("#dashAno")?.addEventListener("change",e=>{DASH_ANO=e.target.value;viewDash();});
-  $("#dDiaModo").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;DASH_DIA=b.dataset.m;viewDash();});
+  $("#dDiaModo")?.addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;DASH_DIA=b.dataset.m;viewDash();});
 }
 const miniStat=(l,v)=>`<div style="display:flex;justify-content:space-between;font-size:13px"><span style="color:var(--muted)">${l}</span><b class="tnum">${v}</b></div>`;
 const pieceTile=(l,v)=>`<div class="tile" style="padding:13px 14px"><div class="lbl">${l}</div><div class="val tnum" style="font-size:22px">${v}</div></div>`;
@@ -1442,7 +1478,7 @@ function viewEntradas(){
 
 // despesas do mês corrente (usado no Painel)
 const despesasMes=()=>DESPESAS.filter(d=>d.data.startsWith(MES_ATUAL)).reduce((s,d)=>s+d.valor,0);
-let DSF={d:{ano:MES_ATUAL.slice(0,4),mes:MES_ATUAL.slice(5,7),dia:""},q:""};
+let DSF={d:{ano:hojeISO().slice(0,4),mes:hojeISO().slice(5,7),dia:""},q:""};
 function viewDespesas(){
   const q=DSF.q.trim();
   const lista=DESPESAS.filter(d=>dfMatch(d.data,DSF.d)&&(!q||busca([d.forn,d.desc,d.pay],q)))
@@ -1495,12 +1531,12 @@ function viewFech(){
       <tbody>${twoCol(DIARIO)}</tbody></table></div></div></div>
   </div>`;
 }
-function twoCol(arr){
+function twoCol(arr,mes=MES_ATUAL.slice(5,7)){
   let rows="";
   for(let i=0;i<16;i++){
     const a=i,b=i+16;
-    rows+=`<tr><td class="tnum">${a+1}/10</td><td class="num tnum">${brl(arr[a]||0)}</td>`
-      +(b<31?`<td class="tnum">${b+1}/10</td><td class="num tnum">${brl(arr[b]||0)}</td>`:`<td></td><td></td>`)+`</tr>`;
+    rows+=`<tr><td class="tnum">${a+1}/${mes}</td><td class="num tnum">${brl(arr[a]||0)}</td>`
+      +(b<arr.length&&b<31?`<td class="tnum">${b+1}/${mes}</td><td class="num tnum">${brl(arr[b]||0)}</td>`:`<td></td><td></td>`)+`</tr>`;
   }
   return rows;
 }
@@ -1849,7 +1885,7 @@ function viewPDV(){
   };
   // busca por descrição: todas as palavras digitadas precisam aparecer (nome, código, cor, tamanho, categoria)
   let sug=[], sel=0;
-  const fechaSug=()=>{sug=[];$("#v_sug").hidden=true;};
+  const fechaSug=()=>{sug=[]; const b=$("#v_sug"); if(b) b.hidden=true;}; // a tela pode já ter mudado (blur atrasado)
   const desenhaSug=()=>{
     const box=$("#v_sug");
     box.innerHTML=sug.length?sug.map((p,k)=>`<button type="button" data-s="${k}" class="${k===sel?"on":""}" ${p.qtd>0||ehGenerico(p)?"":"disabled"}>
