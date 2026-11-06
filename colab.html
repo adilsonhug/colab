@@ -488,7 +488,7 @@ function colChart({cats,series,h=170,labels=true}){
     t.textContent=b.dataset.tip; const r=b.getBoundingClientRect(); t.style.opacity=1;
     t.style.left=Math.min(innerWidth-t.offsetWidth-8,Math.max(8,r.left+r.width/2-t.offsetWidth/2))+"px"; t.style.top=(r.top-t.offsetHeight-8)+"px";});
 })();
-const payIcon=p=>({"Pix":"#1f9d63","Dinheiro":"#c07c00","Cartão crédito":"#e0242b","Cartão débito":"#3257c5","Desconto em folha":"#7a4cc2"}[p]||"#6f6a60");
+const payIcon=p=>({"Pix":"#1f9d63","Dinheiro":"#c07c00","Cartão crédito":"#e0242b","Cartão débito":"#3257c5","Desconto em folha":"#7a4cc2","Vale-troca":"#0e8a8a"}[p]||"#6f6a60");
 
 function toast(msg){const t=$("#toast");t.textContent=msg;t.classList.add("show");clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove("show"),2200);}
 
@@ -520,7 +520,9 @@ $("#loginForm").addEventListener("submit",async e=>{
 const NAV=[
   {id:"dash",label:"Painel",icon:'<path d="M3 13h8V3H3zM13 21h8V11h-8zM13 3v6h8V3zM3 21h8v-6H3z"/>'},
   {id:"pdv",label:"Nova venda",icon:'<circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/>'},
+  {id:"caixa",label:"Caixa",icon:'<rect x="2" y="7" width="20" height="13" rx="2"/><path d="M6 7V4h12v3M2 12h20M10 16h4"/>'},
   {id:"vendas",label:"Vendas",icon:'<path d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13 5.4 5M7 13l-2.3 4.6A1 1 0 0 0 5.6 19H17M7 13h10"/><circle cx="9" cy="21" r="1"/><circle cx="18" cy="21" r="1"/>'},
+  {id:"trocas",label:"Trocas / Devoluções",icon:'<path d="M3 7h13l-3-3M21 17H8l3 3"/>'},
   {id:"estoque",label:"Estoque",icon:'<path d="M21 16V8a2 2 0 0 0-1-1.7l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.7l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="m3.3 7 8.7 5 8.7-5M12 22V12"/>'},
   {id:"inventario",label:"Inventário",icon:'<path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="m9 14 2 2 4-4"/>'},
   {id:"importar",label:"Importar nota",icon:'<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M12 11v6M9 14l3 3 3-3"/>'},
@@ -555,10 +557,10 @@ $("#theme").addEventListener("click",()=>{
 /* ---------------- VIEWS ---------------- */
 function route(){
   if(NAV.some(i=>i.id===current&&i.admin)&&SESSION.role!=="admin") current="dash"; // abas só do administrador
-  const titles={dash:"Painel",pdv:"Nova venda",vendas:"Vendas & Caixa",estoque:"Estoque",entradas:"Relatório de entradas",importar:"Importar nota / cupom",inventario:"Inventário",despesas:"Despesas",fech:"Fechamento do mês",comissao:"Comissão",saidas:"Condicional e costureira",folha:"Vendas para funcionários — desconto em folha",conta:SESSION.role==="admin"?"Painel de controle — usuários":"Minha conta"};
+  const titles={dash:"Painel",pdv:"Nova venda",vendas:"Vendas & Caixa",estoque:"Estoque",entradas:"Relatório de entradas",importar:"Importar nota / cupom",inventario:"Inventário",despesas:"Despesas",fech:"Fechamento do mês",comissao:"Comissão",saidas:"Condicional e costureira",folha:"Vendas para funcionários — desconto em folha",trocas:"Trocas e devoluções",caixa:"Caixa — abertura e fechamento",conta:SESSION.role==="admin"?"Painel de controle — usuários":"Minha conta"};
   $("#pageTitle").textContent=titles[current];
   $("#topExtra").innerHTML="";
-  ({dash:viewDash,pdv:viewPDV,importar:viewImportar,vendas:viewVendas,estoque:viewEstoque,entradas:viewEntradas,inventario:viewInventario,despesas:viewDespesas,fech:viewFech,comissao:viewComissao,saidas:viewSaidas,folha:viewFolha,conta:viewConta}[current])();
+  ({dash:viewDash,pdv:viewPDV,importar:viewImportar,vendas:viewVendas,estoque:viewEstoque,entradas:viewEntradas,inventario:viewInventario,despesas:viewDespesas,fech:viewFech,comissao:viewComissao,saidas:viewSaidas,folha:viewFolha,trocas:viewTrocas,caixa:viewCaixa,conta:viewConta}[current])();
 }
 
 let DASH_ANO=MES_ATUAL.slice(0,4), DASH_DIA="g";
@@ -710,6 +712,19 @@ function viewVendas(){
     .sort((a,b)=>b.dataISO.localeCompare(a.dataISO)||(b.hora||"").localeCompare(a.hora||"")||b.id-a.id);
   const totFil=lista.reduce((s,v)=>s+v.valor,0);
   const ativo=VF.vend||VF.tipo||VF.pay||VF.cat||VF.q||dfAtivo(VF.d);
+  // devoluções aparecem na lista, marcadas, mas não somam no total (o faturamento só conta o que o cliente pagou)
+  const devs=VF.vend||VF.tipo||(VF.pay&&VF.pay!=="Devolução")?[]:DEVOLUCOES.filter(d=>dfMatch(d.data,VF.d)
+    &&(!q||busca([d.cliente,d.motivo,d.cod,...d.itens.map(i=>i.nome)],q))&&(!VF.cat||d.itens.some(i=>i.cat===VF.cat)));
+  const linhas=[...lista.map(v=>({v,iso:v.dataISO,h:v.hora||"",id:v.id})),...devs.map(d=>({d,iso:d.data,h:d.hora||"",id:0}))]
+    .sort((a,b)=>b.iso.localeCompare(a.iso)||b.h.localeCompare(a.h)||b.id-a.id);
+  const linhaDev=d=>`<tr style="background:var(--crit-soft)">
+        <td class="tnum" style="white-space:nowrap">${fmtDate(d.data)}${d.hora?`<div class="hint">${d.hora}</div>`:""}</td>
+        <td style="min-width:220px"><b style="color:var(--crit)">↩ Devolução</b> · ${esc(d.cliente)} — ${d.itens.map(i=>`${i.qtd>1?i.qtd+" ":""}${esc(i.nome)} ${esc(i.tam||"")}`).join(" + ")}<div class="hint">${esc(d.motivo)} · não soma no total do dia</div></td>
+        <td><div style="display:flex;gap:4px;flex-wrap:wrap">${[...new Set(d.itens.map(i=>i.cat).filter(Boolean))].map(c=>`<span class="badge">${esc(c)}</span>`).join("")}</div></td>
+        <td>${esc(d.user)}</td>
+        <td>${d.destino==="vale"?`<span class="pay"><span class="dot" style="background:#0e8a8a"></span>Vale ${esc(d.cod)}</span>`:`<span class="pay"><span class="dot" style="background:var(--crit)"></span>Dinheiro devolvido</span>`}</td>
+        <td><span class="chip crit">Devolução</span></td>
+        <td class="num tnum" style="color:var(--muted);text-decoration:line-through">${brl(d.valor)}</td></tr>`;
   const sel=(id,lbl,opts,val)=>`<div class="field" style="min-width:140px;flex:1"><label>${lbl}</label>${optSel(id,opts,val)}</div>`;
   const porPay=pays.map(p=>[p,lista.filter(v=>v.pay===p).reduce((s,v)=>s+v.valor,0)]).filter(x=>x[1]>0);
   $("#view").innerHTML=`
@@ -722,27 +737,28 @@ function viewVendas(){
       <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end">
         ${sel("f_vend","Vendedor",vendedores,VF.vend)}
         ${sel("f_tipo","Tipo de venda",["Loja física","Online"],VF.tipo)}
-        ${sel("f_pay","Pagamento",pays,VF.pay)}
+        ${sel("f_pay","Pagamento",[...pays,"Devolução"],VF.pay)}
         ${sel("f_cat","Categoria",cats,VF.cat)}
         <button class="btn ghost" id="f_clear" ${ativo?"":"disabled"} style="padding:9px 14px">Limpar filtros</button>
       </div>
       <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;font-size:13px">
         <span class="chip ${ativo?"warn":"good"}">${lista.length} de ${VENDAS.length} venda(s) · ${brl(totFil)}</span>
+        ${devs.length?`<span class="chip crit">${devs.length} devolução(ões) · ${brl(devs.reduce((s,d)=>s+d.valor,0))} (não somam)</span>`:""}
         ${porPay.map(([p,v])=>`<span class="pay" style="color:var(--muted)"><span class="dot" style="background:${payIcon(p)}"></span>${esc(p)}: <b class="tnum" style="color:var(--fg)">${brl(v)}</b></span>`).join("")}
       </div>
       ${VF.cat?`<div class="hint">Filtro de categoria mostra as vendas que têm ao menos uma peça de ${esc(VF.cat)}; o valor é o total da venda.</div>`:""}
     </div></div>
     <div class="card"><div class="card-b pad0"><div class="tw"><table>
       <thead><tr><th>Data</th><th>Descrição</th><th>Categoria</th><th>Vendedor</th><th>Pagamento</th><th>Tipo</th><th class="num">Valor</th></tr></thead>
-      <tbody>${lista.length?lista.map(v=>`<tr>
+      <tbody>${linhas.length?linhas.map(({v,d})=>d?linhaDev(d):`<tr>
         <td class="tnum" style="white-space:nowrap">${fmtDate(v.dataISO)}${v.hora?`<div class="hint">${v.hora}</div>`:""}</td>
-        <td style="min-width:220px">${v.imp?`<span style="color:var(--muted);font-style:italic">${esc(v.desc)}</span> <span class="badge">importado</span>`:esc(v.desc)}${v.nova?`<div class="hint">baixou ${v.itens.reduce((s,i)=>s+i.qtd,0)} peça(s) do estoque</div>`:""}</td>
+        <td style="min-width:220px">${v.imp?`<span style="color:var(--muted);font-style:italic">${esc(v.desc)}</span> <span class="badge">importado</span>`:esc(v.desc)}${v.nova?`<div class="hint">baixou ${v.itens.reduce((s,i)=>s+i.qtd,0)} peça(s) do estoque</div>`:""}${v.vale?`<div class="hint" style="color:#0e8a8a">troca: ${brl(v.vale.valor)} em vale ${esc(v.vale.cod)} · compra de ${brl(v.valor+v.vale.valor)} · entrou ${brl(v.valor)}</div>`:""}</td>
         <td><div style="display:flex;gap:4px;flex-wrap:wrap">${(v.cats||[]).map(c=>`<span class="badge" style="${c===VF.cat?"background:var(--accent-soft);color:var(--accent)":""}">${esc(c)}</span>`).join("")}</div></td>
         <td>${esc(v.vend)}</td>
         <td><span class="pay"><span class="dot" style="background:${payIcon(v.pay)}"></span>${esc(v.pay)}</span></td>
         <td><span class="badge ${v.tipo==='Online'?'onl':v.tipo==='Loja física'?'fis':''}">${esc(v.tipo)}</span></td>
         <td class="num tnum">${brl(v.valor)}</td></tr>`).join("")
-        :`<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:24px">Nenhuma venda com esses filtros.</td></tr>`}</tbody>
+        :`<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:24px">${VF.pay==="Devolução"?"Nenhuma devolução com esses filtros.":"Nenhuma venda com esses filtros."}</td></tr>`}</tbody>
       <tfoot><tr><td colspan="6" style="text-align:right;font-weight:700;color:var(--muted)">${ativo?"Total filtrado":"Total geral"} (com frete)</td><td class="num tnum" style="font-weight:800">${brl(totFil)}</td></tr></tfoot>
     </table></div></div></div>
     <div class="hint" style="margin-top:10px">Para lançar uma venda, use a aba “Nova venda”.</div>
@@ -1722,8 +1738,12 @@ function viewPDV(){
   const isAdmin=SESSION.role==="admin";
   const vendedores=USERS.filter(u=>u.ativo);
   const cart=PDV.cart;
+  const vales=valesAbertos(), valePre=PDV.pref&&PDV.pref.vale;
   $("#view").innerHTML=`
   <div class="section">
+    ${caixaAberto()?"":`<div class="infobox" id="v_cxbar" style="margin-bottom:14px;background:var(--warn-soft);border-color:transparent;flex-direction:row;align-items:center;gap:10px;flex-wrap:wrap">
+      <b style="color:var(--warn)">Caixa fechado</b><span>Abra o caixa (troco inicial) antes da primeira venda de hoje.</span>
+      <button class="btn sm" id="v_abrecx" style="margin-left:auto">Abrir caixa</button></div>`}
     ${PDV.ultima?`<div class="infobox" style="margin-bottom:14px;background:var(--good-soft);border-color:transparent;flex-direction:row;align-items:center;gap:10px;flex-wrap:wrap">
       <b style="color:var(--good)">✓ Venda registrada</b><span>${brl(PDV.ultima.valor)} · ${esc(PDV.ultima.pay)} · ${esc(PDV.ultima.vend)} · ${fmtDate(PDV.ultima.dataISO)}</span>
       <button class="btn ghost sm" id="v_ver" style="margin-left:auto">Ver em Vendas</button></div>`:""}
@@ -1755,11 +1775,13 @@ function viewPDV(){
             <input class="inp" id="v_desc" inputmode="decimal" placeholder="R$" title="Desconto em R$">
           </div>
         </div>
+        ${vales.length?`<div class="field"><label>Vale-troca (crédito de devolução)</label><select class="inp" id="v_vale"><option value="">Não usar</option>${vales.map(d=>`<option value="${d.id}" ${valePre===d.id?"selected":""}>${esc(d.cod)} · ${esc(d.cliente)} · ${brl(d.saldo)}</option>`).join("")}</select></div>`:""}
         <div class="infobox" style="gap:4px">
           <div style="display:flex;justify-content:space-between"><span style="color:var(--muted)">Subtotal</span><b class="tnum" id="v_sub">R$ 0,00</b></div>
           <div style="display:flex;justify-content:space-between"><span style="color:var(--muted)">Ajustes</span><b class="tnum" id="v_adj">—</b></div>
+          <div id="v_valerow" hidden style="display:flex;justify-content:space-between"><span style="color:#0e8a8a">Vale-troca</span><b class="tnum" id="v_valeval" style="color:#0e8a8a"></b></div>
         </div>
-        <div class="total-bar"><span>Total da venda</span><b class="tnum" id="v_total">R$ 0,00</b></div>
+        <div class="total-bar"><span id="v_totlbl">Total da venda</span><b class="tnum" id="v_total">R$ 0,00</b></div>
         <div style="display:flex;gap:9px"><button class="btn ghost" id="v_clear" style="flex:1">Limpar</button><button class="btn" id="v_save" style="flex:2">Finalizar venda</button></div>
       </div></div>
     </div>
@@ -1768,14 +1790,18 @@ function viewPDV(){
   const msg=(t,ok)=>{const m=$("#v_msg");m.style.color=ok?"var(--good)":"var(--crit)";m.textContent=t;};
   const sub=()=>cart.reduce((s,i)=>s+i.qtd*i.preco,0);
   // desconto: digitando % calcula R$ (e acompanha o carrinho); digitando R$ calcula %
-  let descModo="brl";
+  let descModo="brl", fin={pay:"",vale:null}; // fin: pagamento e vale da venda que está sendo confirmada
   const pct=()=>Math.min(100,Math.max(0,parseNum($("#v_pct").value)||0));
   const desc=()=>descModo==="pct"?+(sub()*pct()/100).toFixed(2):Math.min(sub(),parseNum($("#v_desc").value)||0);
   const frete=()=>parseNum($("#v_frete").value)||0;
   const syncDesc=()=>{ const s0=sub();
     if(descModo==="pct"){ $("#v_desc").value=pct()?desc().toFixed(2).replace(".",","):""; }
     else { const d=desc(); $("#v_pct").value=d&&s0?(d/s0*100).toLocaleString("pt-BR",{maximumFractionDigits:1}):""; } };
-  const total=()=>Math.max(0,sub()-desc()+frete());
+  const cheio=()=>Math.max(0,sub()-desc()+frete());
+  // vale-troca abate do total; o que sobra é o que o cliente paga (e o que entra no faturamento)
+  const valeSel=()=>{const id=+($("#v_vale")?.value||0); return id?DEVOLUCOES.find(d=>d.id===id)||null:null;};
+  const valeUso=()=>{const d=valeSel(); return d?+Math.min(d.saldo,cheio()).toFixed(2):0;};
+  const total=()=>+(cheio()-valeUso()).toFixed(2);
   // produto na venda: CATEGORIA › MARCA / descrição / cor + tamanho
   const caminho=p=>[p.cat,p.marca].filter(Boolean).map(x=>esc(String(x).toUpperCase())).join(` <span style="opacity:.6">›</span> `);
   const infoProd=(p,extra="")=>`<div class="pdv-prod">
@@ -1805,6 +1831,10 @@ function viewPDV(){
     syncDesc();
     const pc=sub()?desc()/sub()*100:0;
     $("#v_adj").textContent=(desc()||frete())?`−${brl(desc())}${desc()?` (${pc.toLocaleString("pt-BR",{maximumFractionDigits:1})}%)`:""} / +${brl(frete())}`:"—";
+    const vu=valeUso();
+    $("#v_valerow").hidden=!valeSel(); $("#v_valerow").style.display=valeSel()?"flex":"none";
+    $("#v_valeval").textContent=valeSel()?`−${brl(vu)}${valeSel().saldo>vu?` (sobra ${brl(valeSel().saldo-vu)})`:""}`:"";
+    $("#v_totlbl").textContent=valeSel()?"A pagar":"Total da venda";
     $("#v_total").textContent=brl(total());
     document.querySelector(".card-h .hint").textContent=`${cart.reduce((s,i)=>s+i.qtd,0)} peça(s)`;
   };
@@ -1860,6 +1890,8 @@ function viewPDV(){
   $("#v_pct").addEventListener("input",()=>{descModo="pct";draw();});
   $("#v_desc").addEventListener("input",()=>{descModo="brl";draw();});
   $("#v_frete").addEventListener("input",draw);
+  $("#v_vale")?.addEventListener("change",draw);
+  $("#v_abrecx")?.addEventListener("click",()=>modalAbrirCaixa(()=>$("#v_cxbar")?.remove()));
   $("#v_clear").addEventListener("click",()=>{PDV.cart=[];PDV.ultima=null;viewPDV();});
   $("#v_ver")?.addEventListener("click",()=>{current="vendas";renderNav();route();});
   if(PDV.pref&&PDV.pref.pay) $("#v_pay").value=PDV.pref.pay; // veio do retorno de funcionário: já em desconto em folha
@@ -1885,8 +1917,13 @@ function viewPDV(){
       t.style.borderColor="var(--crit)"; t.focus(); t.addEventListener("change",()=>{t.style.borderColor="";},{once:true}); msg(texto); return true; };
     if(exige("v_vend","Escolha o vendedor da venda.")) return;
     if(exige("v_tipo","Escolha o tipo da venda: Loja física ou Online.")) return;
+    // primeira venda do dia: abre o caixa e segue para a confirmação
+    if(dataISO===hojeISO()&&!caixaAberto()) return modalAbrirCaixa(()=>{$("#v_cxbar")?.remove(); $("#v_save")?.click();},"Abra o caixa antes da primeira venda de hoje.");
     const valor=+total().toFixed(2), tipo=$("#v_tipo").value, fr=frete();
-    const pay=$("#v_pay").value, vend=$("#v_vend").value, pecas=cart.reduce((s,i)=>s+i.qtd,0), dsc=desc();
+    const vs=valeSel(), vu=valeUso();
+    // pago todo com vale: a forma de pagamento vira "Vale-troca"
+    const pay=vs&&valor===0?"Vale-troca":$("#v_pay").value, vend=$("#v_vend").value, pecas=cart.reduce((s,i)=>s+i.qtd,0), dsc=desc();
+    fin={pay,vale:vs&&vu?{id:vs.id,cod:vs.cod,valor:vu}:null};
     // confirmação final antes de registrar (resumo da venda)
     modal(`<h3>Confirmar venda?</h3>
       <div class="tw" style="border:1px solid var(--border);border-radius:10px;max-height:34vh;overflow:auto"><table style="min-width:0">
@@ -1896,8 +1933,9 @@ function viewPDV(){
         <div style="display:flex;justify-content:space-between"><span style="color:var(--muted)">Pagamento</span><b>${esc(pay)}</b></div>
         <div style="display:flex;justify-content:space-between"><span style="color:var(--muted)">Vendedor</span><b>${esc(vend)}</b></div>
         ${dsc||fr?`<div style="display:flex;justify-content:space-between"><span style="color:var(--muted)">Ajustes</span><b class="tnum">${dsc?"−"+brl(dsc):""}${dsc&&fr?" / ":""}${fr?"+"+brl(fr):""}</b></div>`:""}
+        ${fin.vale?`<div style="display:flex;justify-content:space-between"><span style="color:#0e8a8a">Vale-troca ${esc(fin.vale.cod)} (${esc(vs.cliente)})</span><b class="tnum" style="color:#0e8a8a">−${brl(fin.vale.valor)}</b></div>`:""}
       </div>
-      <div class="total-bar"><span>Total · ${pecas} peça(s)</span><b class="tnum">${brl(valor)}</b></div>
+      <div class="total-bar"><span>${fin.vale?"A pagar":"Total"} · ${pecas} peça(s)</span><b class="tnum">${brl(valor)}</b></div>
       ${pay===PAG_FOLHA?`<div class="field"><label>Funcionário (desconto em folha) <span class="req">*</span></label><select class="inp" id="cf_func"><option value="">Selecione…</option>${USERS.filter(u=>u.ativo!==false).map(u=>`<option ${PDV.pref&&PDV.pref.func===u.name?"selected":""}>${esc(u.name)}</option>`).join("")}</select></div>`:""}
       <div class="err" id="cf_err" style="min-height:0"></div>
       <div class="row"><button class="btn ghost" data-close>Voltar</button><button class="btn" id="cf_ok">${pay==="Pix"?"Confirmar e gerar Pix":pay===PAG_FOLHA?"🔒 Confirmar (senha do administrador)":"Confirmar venda"}</button></div>`,"wide");
@@ -1921,8 +1959,12 @@ function viewPDV(){
     cart.forEach(i=>i.p.qtd-=i.qtd);
     const descr=cart.map(i=>`${i.qtd>1?i.qtd+" ":""}${i.p.nome} ${i.p.cor} ${i.p.tam}`).join(" + ")+(func?` — funcionário: ${func} (desconto em folha)`:"");
     const hora=dataISO===hojeISO()?new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}):"";
-    const v={id:VENDAS.length+1,desc:descr,valor,desconto:desc(),vend:$("#v_vend").value,pay:$("#v_pay").value,tipo,nova:true,dataISO,hora,
-      itens:cart.map(i=>({sku:i.p.sku,qtd:i.qtd,preco:i.preco,cat:i.p.cat})),cats:[...new Set(cart.map(i=>i.p.cat))],...(func?{func}:{})};
+    const cx=dataISO===hojeISO()?caixaAberto():null;
+    // valor = o que o cliente pagou; o vale usado fica guardado à parte (não entra de novo no faturamento)
+    const v={id:VENDAS.length+1,desc:descr,valor,desconto:desc(),vend:$("#v_vend").value,pay:fin.pay,tipo,nova:true,dataISO,hora,
+      itens:cart.map(i=>({sku:i.p.sku,qtd:i.qtd,preco:i.preco,cat:i.p.cat})),cats:[...new Set(cart.map(i=>i.p.cat))],...(func?{func}:{}),
+      ...(fin.vale?{vale:fin.vale}:{}),...(cx?{cx:cx.id}:{})};
+    if(fin.vale){ const d=DEVOLUCOES.find(x=>x.id===fin.vale.id); if(d) d.saldo=Math.max(0,+(d.saldo-fin.vale.valor).toFixed(2)); }
     VENDAS.push(v); somaFaturamento(dataISO,valor,tipo,fr);
     PDV={cart:[],ultima:v}; viewPDV(); toast(`Venda de ${brl(valor)} registrada. Estoque baixado.`);
   }
@@ -2128,6 +2170,296 @@ function modalRetornoSaida(s){
       toast(`Peças compradas por ${s.pessoa} foram para a Nova venda. Finalize a venda.`);
     } else { viewSaidas(); toast(`Retorno registrado (${s.pessoa}).`); }
   }
+}
+
+/* ---------------- TROCAS / DEVOLUÇÕES ----------------
+   A peça devolvida volta ao estoque e vira um vale-troca (crédito do cliente), usado como pagamento na Nova venda.
+   A devolução aparece na aba Vendas mas não mexe no faturamento: na troca só entra o que o cliente pagar a mais.
+   Devolver em dinheiro é exceção: pede a senha do administrador e sai do dinheiro do caixa. */
+let DEVOLUCOES=[];
+const MOTIVOS_DEV=["Troca de tamanho","Troca de modelo / cor","Defeito","Não gostou","Outro"];
+const valesAbertos=()=>DEVOLUCOES.filter(d=>d.destino==="vale"&&d.saldo>0.009);
+const horaAgora=()=>new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"});
+let DEVF="todas";
+function viewTrocas(){
+  const mes=hojeISO().slice(0,7), doMes=DEVOLUCOES.filter(d=>String(d.data).startsWith(mes));
+  const abertos=valesAbertos();
+  const lista=(DEVF==="vales"?abertos:DEVOLUCOES).slice().sort((a,b)=>String(b.data).localeCompare(String(a.data))||b.id-a.id);
+  const din=doMes.filter(d=>d.destino==="dinheiro");
+  $("#view").innerHTML=`
+  <div class="section">
+    <div class="tiles compact" style="margin-bottom:14px">
+      <div class="tile"><div class="lbl">Devoluções no mês</div><div class="val tnum">${doMes.length}</div><div class="sub">${doMes.reduce((n,d)=>n+d.itens.reduce((m,i)=>m+i.qtd,0),0)} peça(s) · ${brl(doMes.reduce((s,d)=>s+d.valor,0))}</div></div>
+      <div class="tile"><div class="lbl"><span class="dot" style="background:#0e8a8a"></span>Vales em aberto</div><div class="val tnum">${brl(abertos.reduce((s,d)=>s+d.saldo,0))}</div><div class="sub">${abertos.length} cliente(s) com crédito</div></div>
+      <div class="tile"><div class="lbl"><span class="dot" style="background:var(--crit)"></span>Devolvido em dinheiro</div><div class="val tnum">${brl(din.reduce((s,d)=>s+d.valor,0))}</div><div class="sub">${din.length} no mês</div></div>
+    </div>
+    <div class="toolbar">
+      <button class="btn" id="dv_nova">+ Nova devolução</button>
+      <div class="sizes" id="dv_f"><button type="button" data-f="todas" class="${DEVF==="todas"?"on":""}">Todas</button><button type="button" data-f="vales" class="${DEVF==="vales"?"on":""}">Vales em aberto</button></div>
+    </div>
+    <div class="card"><div class="card-b pad0"><div class="tw"><table>
+      <thead><tr><th>Data</th><th>Cliente</th><th>Peças</th><th>Motivo</th><th>Crédito</th><th class="num">Valor</th><th></th></tr></thead>
+      <tbody>${lista.length?lista.map(d=>`<tr>
+        <td class="tnum">${fmtDate(d.data)}<div class="hint">${esc(d.hora||"")} · ${esc(d.user||"")}</div></td>
+        <td><b>${esc(d.cliente)}</b>${d.contato?`<div class="hint">${esc(d.contato)}</div>`:""}</td>
+        <td style="max-width:280px"><div class="hint" style="color:var(--fg)">${d.itens.map(i=>`${i.qtd>1?i.qtd+"× ":""}${esc(i.nome)} <span style="color:var(--muted)">(${esc(i.cor||"")}${i.cor&&i.tam?" · ":""}${esc(i.tam||"")})</span>`).join("<br>")}</div>${d.estoque===false?`<div class="hint" style="color:var(--warn)">não voltou ao estoque</div>`:""}</td>
+        <td>${esc(d.motivo)}${d.obs?`<div class="hint">${esc(d.obs)}</div>`:""}</td>
+        <td>${d.destino==="vale"?`<span class="chip" style="color:#0e8a8a;background:#0e8a8a1f">Vale ${esc(d.cod)}</span><div class="hint">${d.saldo>0.009?`saldo ${brl(d.saldo)}`:"já usado"}</div>`:`<span class="chip crit">Dinheiro devolvido</span>${d.autor?`<div class="hint">aut.: ${esc(d.autor)}</div>`:""}`}</td>
+        <td class="num tnum">${brl(d.valor)}</td>
+        <td style="text-align:right">${d.destino==="vale"&&d.saldo>0.009?`<button class="btn sm" data-usar="${d.id}">Usar na venda</button>`:""}</td></tr>`).join("")
+        :`<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:24px">${DEVF==="vales"?"Nenhum vale-troca em aberto.":"Nenhuma devolução registrada ainda."}</td></tr>`}</tbody>
+    </table></div></div></div>
+    <div class="hint" style="margin-top:10px">A devolução aparece na aba Vendas, mas não diminui o faturamento. Na troca, o vale é usado como pagamento na Nova venda e só a diferença paga entra no dia.</div>
+  </div>`;
+  $("#dv_nova").addEventListener("click",()=>modalNovaDevolucao());
+  $("#dv_f").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;DEVF=b.dataset.f;viewTrocas();});
+  $("#view").querySelectorAll("[data-usar]").forEach(b=>b.addEventListener("click",()=>usarVale(+b.dataset.usar)));
+}
+// leva o vale para a Nova venda (já selecionado no pagamento)
+function usarVale(id){ PDV.pref={vale:id}; PDV.ultima=null; current="pdv"; renderNav(); route(); toast("Vale-troca selecionado. Bipe as peças novas."); }
+// preço que o cliente pagou na última venda dessa peça (já com o desconto da venda); senão, o preço de etiqueta
+function precoPago(p){
+  const v=VENDAS.slice().reverse().find(v=>(v.itens||[]).some(i=>i.sku===p.sku));
+  if(!v) return {preco:p.preco,de:""};
+  const it=v.itens.find(i=>i.sku===p.sku), bruto=v.itens.reduce((s,i)=>s+i.qtd*i.preco,0);
+  const f=bruto?Math.max(0,bruto-(v.desconto||0))/bruto:1;
+  return {preco:+(it.preco*f).toFixed(2),de:v.dataISO};
+}
+function modalNovaDevolucao(){
+  const itens=[]; // {p,qtd,preco,de}
+  modal(`<h3>Nova devolução / troca</h3>
+    <div class="g g2">
+      <div class="field"><label>Cliente <span class="req">*</span></label><input class="inp" id="dv_cli" placeholder="Nome"></div>
+      <div class="field"><label>Telefone</label><input class="inp" id="dv_tel" placeholder="(49) 9…" inputmode="tel"></div>
+    </div>
+    <div class="g g2">
+      <div class="field"><label>Motivo <span class="req">*</span></label><select class="inp" id="dv_mot">${MOTIVOS_DEV.map(m=>`<option>${m}</option>`).join("")}</select></div>
+      <div class="field"><label>Observação</label><input class="inp" id="dv_obs" placeholder="Ex.: comprou dia 02, trocar por 42"></div>
+    </div>
+    <div class="field"><label>Peças devolvidas <span class="req">*</span></label>
+      <div class="scanbar"><input class="inp" id="dv_code" autocomplete="off" placeholder="Bipe o código de barras (ou digite o código)"><button class="btn ghost" type="button" id="dv_add">Adicionar</button></div></div>
+    <div id="dv_lista"></div>
+    <label style="display:flex;gap:8px;align-items:center;font-size:13px"><input type="checkbox" id="dv_est" checked style="width:17px;height:17px"> As peças voltam para o estoque (desmarque se tiver defeito)</label>
+    <div class="field"><label>O cliente recebe</label>
+      <div class="sizes" id="dv_dest"><button type="button" data-d="vale" class="on">Vale-troca (crédito)</button><button type="button" data-d="dinheiro">🔒 Dinheiro de volta</button></div></div>
+    <div class="err" id="dv_err"></div>
+    <div class="row"><button class="btn ghost" data-close>Cancelar</button><button class="btn ghost" id="dv_ok">Registrar</button><button class="btn" id="dv_trocar">Registrar e trocar agora</button></div>`,"wide");
+  let destino="vale";
+  const err=t=>{$("#dv_err").textContent=t;};
+  const totalDev=()=>+itens.reduce((s,x)=>s+x.qtd*x.preco,0).toFixed(2);
+  const draw=()=>{
+    $("#dv_lista").innerHTML=itens.length?`<div class="tw" style="border:1px solid var(--border);border-radius:10px"><table style="min-width:0">
+      <thead><tr><th>Peça</th><th class="num">Qtd.</th><th class="num">Valor unit.</th><th></th></tr></thead><tbody>
+      ${itens.map((x,k)=>`<tr><td><b>${esc(x.p.nome)}</b><div class="hint">${esc(corCurta(x.p))} · Tam. ${esc(x.p.tam||"—")}${x.de?` · vendida em ${fmtDate(x.de)}`:""}</div></td>
+        <td class="num"><input class="inp" type="number" min="1" data-dq="${k}" value="${x.qtd}" style="width:60px"></td>
+        <td class="num"><input class="inp" inputmode="decimal" data-dp="${k}" value="${x.preco.toFixed(2).replace(".",",")}" style="width:90px;text-align:right" title="Valor que o cliente pagou"></td>
+        <td><button class="icon-btn" style="width:28px;height:28px" data-drm="${k}" title="Remover">×</button></td></tr>`).join("")}</tbody>
+      <tfoot><tr><td colspan="2" style="text-align:right">Crédito do cliente</td><td class="num tnum" style="font-weight:800">${brl(totalDev())}</td><td></td></tr></tfoot></table></div>`
+      :`<div class="infobox" style="text-align:center;color:var(--muted)">Nenhuma peça ainda. Bipe as peças que o cliente trouxe.</div>`;
+    $("#dv_lista").querySelectorAll("[data-dq]").forEach(x=>x.addEventListener("change",()=>{itens[+x.dataset.dq].qtd=Math.max(1,parseInt(x.value)||1);draw();}));
+    $("#dv_lista").querySelectorAll("[data-dp]").forEach(x=>{x.addEventListener("focus",()=>x.select());
+      x.addEventListener("change",()=>{const v=parseNum(x.value); itens[+x.dataset.dp].preco=v>=0?+v.toFixed(2):0; draw();});});
+    $("#dv_lista").querySelectorAll("[data-drm]").forEach(x=>x.addEventListener("click",()=>{itens.splice(+x.dataset.drm,1);draw();}));
+  };
+  const add=()=>{ const c=$("#dv_code").value.trim(); if(!c) return; $("#dv_code").value=""; err("");
+    const p=acharProduto(c); if(!p) return err(`Código ${c} não cadastrado.`);
+    const it=itens.find(x=>x.p===p); if(it) it.qtd++; else { const pp=precoPago(p); itens.push({p,qtd:1,preco:pp.preco,de:pp.de}); }
+    draw(); $("#dv_code").focus(); };
+  $("#dv_add").addEventListener("click",add);
+  $("#dv_code").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();add();}});
+  $("#dv_mot").addEventListener("change",e=>{$("#dv_est").checked=e.target.value!=="Defeito";});
+  $("#dv_dest").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return; destino=b.dataset.d;
+    $("#dv_dest").querySelectorAll("button").forEach(x=>x.classList.toggle("on",x===b)); $("#dv_trocar").hidden=destino!=="vale";});
+  draw(); setTimeout(()=>$("#dv_cli")?.focus(),50);
+  const registrar=trocar=>{
+    const cliente=$("#dv_cli").value.trim();
+    if(!cliente) return err("Informe o nome do cliente.");
+    if(!itens.length) return err("Bipe pelo menos uma peça devolvida.");
+    const valor=totalDev(); if(!(valor>0)) return err("Informe o valor das peças devolvidas.");
+    const dados={cliente,contato:$("#dv_tel").value.trim(),motivo:$("#dv_mot").value,obs:$("#dv_obs").value.trim(),volta:$("#dv_est").checked};
+    const fazer=()=>{
+      if(dados.volta) itens.forEach(x=>{x.p.qtd+=x.qtd;});
+      const id=DEVOLUCOES.reduce((m,x)=>Math.max(m,x.id),0)+1, cx=caixaAberto();
+      const d={id,cod:destino==="vale"?"VT-"+String(id).padStart(4,"0"):"",data:hojeISO(),hora:horaAgora(),user:SESSION.name,
+        cliente:dados.cliente,contato:dados.contato,motivo:dados.motivo,obs:dados.obs,destino,estoque:dados.volta,
+        itens:itens.map(x=>({sku:x.p.sku,nome:x.p.nome,cor:corCurta(x.p),tam:x.p.tam,cat:x.p.cat,qtd:x.qtd,preco:x.preco})),
+        valor,saldo:destino==="vale"?valor:0,...(destino==="dinheiro"&&!ADM()?{autor:"administrador"}:{}),...(cx?{cx:cx.id}:{})};
+      DEVOLUCOES.push(d); closeModal();
+      if(trocar) return usarVale(d.id);
+      DEVF="todas"; current="trocas"; renderNav(); route();
+      toast(destino==="vale"?`Vale ${d.cod} de ${brl(valor)} para ${cliente}.`:`Devolução de ${brl(valor)} em dinheiro registrada.`);
+    };
+    if(destino==="dinheiro") return guardAdmin(fazer,`Devolver ${brl(valor)} em dinheiro para ${esc(cliente)}. Confirme com a senha do administrador.`);
+    fazer();
+  };
+  $("#dv_ok").addEventListener("click",()=>registrar(false));
+  $("#dv_trocar").addEventListener("click",()=>registrar(true));
+}
+
+/* ---------------- CAIXA ----------------
+   Abertura (troco inicial) → sangrias e reforços durante o dia → fechamento com o dinheiro contado.
+   As vendas do dia feitas com o caixa aberto ficam ligadas a ele (v.cx), assim o fechamento sabe o esperado. */
+let CAIXAS=[];
+const caixaAberto=()=>CAIXAS.find(c=>!c.fech)||null;
+function caixaResumo(c){
+  const vendas=VENDAS.filter(v=>v.cx===c.id), devs=DEVOLUCOES.filter(d=>d.cx===c.id);
+  const porPay={}; vendas.forEach(v=>{ if(v.valor) porPay[v.pay]=+((porPay[v.pay]||0)+v.valor).toFixed(2); });
+  const soma=t=>(c.movs||[]).filter(m=>m.tipo===t).reduce((s,m)=>s+m.valor,0);
+  const sang=soma("sangria"), ref=soma("reforco");
+  const devDin=devs.filter(d=>d.destino==="dinheiro").reduce((s,d)=>s+d.valor,0);
+  const vales=vendas.reduce((s,v)=>s+(v.vale?v.vale.valor:0),0);
+  const esperado=+(c.troco+(porPay["Dinheiro"]||0)+ref-sang-devDin).toFixed(2);
+  return {n:vendas.length,total:+vendas.reduce((s,v)=>s+v.valor,0).toFixed(2),porPay,sang,ref,devDin,devN:devs.length,vales,esperado};
+}
+const difTxt=d=>Math.abs(d)<0.005?`<span class="chip good">Bateu</span>`:d>0?`<span class="chip warn">Sobrou ${brl(d)}</span>`:`<span class="chip crit">Faltou ${brl(-d)}</span>`;
+function viewCaixa(){
+  const isAdmin=ADM(), c=caixaAberto(), r=c&&caixaResumo(c);
+  const hist=CAIXAS.filter(x=>x.fech).slice().sort((a,b)=>String(b.fech.data+b.fech.hora).localeCompare(String(a.fech.data+a.fech.hora))||b.id-a.id).slice(0,60);
+  const movs=c?[...(c.movs||[]).map(m=>({...m,lbl:m.tipo==="sangria"?"Sangria":"Reforço",sin:m.tipo==="sangria"?-1:1})),
+    ...DEVOLUCOES.filter(d=>d.cx===c.id&&d.destino==="dinheiro").map(d=>({hora:d.hora,user:d.user,valor:d.valor,motivo:`Devolução — ${d.cliente}`,lbl:"Devolução",sin:-1}))]
+    .sort((a,b)=>String(a.hora).localeCompare(String(b.hora))):[];
+  $("#view").innerHTML=`
+  <div class="section">
+    ${c?`
+    <div class="infobox" style="margin-bottom:14px;background:var(--good-soft);border-color:transparent;flex-direction:row;align-items:center;gap:10px;flex-wrap:wrap">
+      <b style="color:var(--good)">● Caixa aberto</b><span>desde ${fmtDate(c.data)} às ${esc(c.hora)} · por ${esc(c.user)}</span>
+      ${c.data!==hojeISO()?`<span class="chip warn">aberto em outro dia — feche este caixa</span>`:""}</div>
+    <div class="tiles compact" style="margin-bottom:14px">
+      <div class="tile"><div class="lbl">Troco inicial</div><div class="val tnum">${brl(c.troco)}</div></div>
+      <div class="tile"><div class="lbl"><span class="dot" style="background:var(--accent)"></span>Vendas no caixa</div><div class="val tnum">${brl(r.total)}</div><div class="sub">${r.n} venda(s)${r.vales?` · +${brl(r.vales)} em vale`:""}</div></div>
+      <div class="tile"><div class="lbl"><span class="dot" style="background:var(--crit)"></span>Sangrias</div><div class="val tnum">${brl(r.sang+r.devDin)}</div><div class="sub">reforços ${brl(r.ref)}</div></div>
+      ${isAdmin?`<div class="tile"><div class="lbl"><span class="dot" style="background:#c07c00"></span>Dinheiro na gaveta</div><div class="val tnum">${brl(r.esperado)}</div><div class="sub">esperado agora</div></div>`:""}
+    </div>
+    <div class="toolbar">
+      <button class="btn ghost" id="cx_sang">− Sangria</button><button class="btn ghost" id="cx_ref">+ Reforço</button>
+      <button class="btn" id="cx_fechar" style="margin-left:auto">Fechar caixa</button>
+    </div>
+    <div class="grid2" style="margin-top:0;align-items:start">
+      <div class="card"><div class="card-h"><h3>Por forma de pagamento</h3><span class="chip good">${brl(r.total)}</span></div>
+        <div class="card-b" style="display:flex;flex-direction:column;gap:12px">${Object.keys(r.porPay).length?Object.entries(r.porPay).sort((a,b)=>b[1]-a[1]).map(([k,v])=>splitRow(esc(k),v,r.total,payIcon(k))).join("")
+          :`<div class="infobox" style="text-align:center;color:var(--muted)">Nenhuma venda neste caixa ainda.</div>`}
+          ${r.vales?`<div class="hint">Vale-troca usado: ${brl(r.vales)} (não é dinheiro novo, não entra no total).</div>`:""}</div></div>
+      <div class="card"><div class="card-h"><h3>Movimentos do dinheiro</h3></div>
+        <div class="card-b ${movs.length?"pad0":""}">${movs.length?`<div class="tw"><table style="min-width:0"><tbody>${movs.map(m=>`<tr>
+          <td class="tnum">${esc(m.hora||"")}</td><td><b>${m.lbl}</b><div class="hint">${esc(m.motivo||"")} · ${esc(m.user||"")}</div></td>
+          <td class="num tnum" style="color:${m.sin<0?"var(--crit)":"var(--good)"}">${m.sin<0?"−":"+"}${brl(m.valor)}</td></tr>`).join("")}</tbody></table></div>`
+          :`<div class="infobox" style="text-align:center;color:var(--muted)">Sem sangria ou reforço.</div>`}</div></div>
+    </div>`
+    :`<div class="card" style="margin-bottom:14px"><div class="card-b" style="display:flex;flex-direction:column;align-items:center;gap:12px;padding:34px 16px;text-align:center">
+      <div style="font-family:var(--font-display);font-weight:800;font-size:22px">Caixa fechado</div>
+      <div class="hint">Informe o troco que está na gaveta para começar o dia.</div>
+      <button class="btn" id="cx_abrir" style="padding:12px 28px;font-size:15px">Abrir caixa</button></div></div>`}
+    <div class="card" style="margin-top:16px"><div class="card-h"><h3>Caixas fechados</h3></div><div class="card-b pad0"><div class="tw"><table>
+      <thead><tr><th>Data</th><th>Abertura</th><th>Fechamento</th><th class="num">Vendas</th><th class="num">Dinheiro esperado</th><th class="num">Contado</th><th>Diferença</th><th></th></tr></thead>
+      <tbody>${hist.length?hist.map(x=>`<tr>
+        <td class="tnum">${fmtDate(x.data)}</td>
+        <td>${esc(x.hora)} · ${esc(x.user)}<div class="hint">troco ${brl(x.troco)}</div></td>
+        <td>${fmtDate(x.fech.data)} ${esc(x.fech.hora)} · ${esc(x.fech.user)}${x.fech.obs?`<div class="hint">${esc(x.fech.obs)}</div>`:""}</td>
+        <td class="num tnum">${brl(x.fech.resumo.total)}<div class="hint">${x.fech.resumo.n} venda(s)</div></td>
+        <td class="num tnum">${brl(x.fech.esperado)}</td><td class="num tnum">${brl(x.fech.contado)}</td>
+        <td>${difTxt(x.fech.dif)}</td>
+        <td style="text-align:right"><button class="btn ghost sm" data-cxp="${x.id}">${ICO_PRINT}Imprimir</button></td></tr>`).join("")
+        :`<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:24px">Nenhum caixa fechado ainda.</td></tr>`}</tbody>
+    </table></div></div></div>
+  </div>`;
+  $("#cx_abrir")?.addEventListener("click",()=>modalAbrirCaixa(viewCaixa));
+  $("#cx_sang")?.addEventListener("click",()=>modalMovCaixa("sangria"));
+  $("#cx_ref")?.addEventListener("click",()=>modalMovCaixa("reforco"));
+  $("#cx_fechar")?.addEventListener("click",()=>modalFecharCaixa());
+  $("#view").querySelectorAll("[data-cxp]").forEach(b=>b.addEventListener("click",()=>imprimirCaixa(CAIXAS.find(x=>x.id===+b.dataset.cxp))));
+}
+function modalAbrirCaixa(onOk,aviso){
+  if(caixaAberto()){ onOk&&onOk(); return; }
+  const ult=CAIXAS.filter(x=>x.fech).sort((a,b)=>b.id-a.id)[0], sug=ult&&ult.fech.fica!=null?ult.fech.fica:"";
+  modal(`<h3>Abrir caixa</h3>
+    ${aviso?`<p style="margin:0;font-size:13px;color:var(--muted)">${aviso}</p>`:""}
+    <div class="field"><label>Troco inicial em dinheiro (R$)</label><input class="inp" id="ab_troco" inputmode="decimal" placeholder="0,00" value="${sug!==""?(+sug).toFixed(2).replace(".",","):""}" style="font-size:18px"></div>
+    ${sug!==""?`<div class="hint">Sugerido: o que ficou na gaveta no último fechamento (${brl(+sug)}).</div>`:""}
+    <div class="err" id="ab_err"></div>
+    <div class="row"><button class="btn ghost" data-close>Cancelar</button><button class="btn" id="ab_ok">Abrir caixa</button></div>`);
+  const go=()=>{ const t=$("#ab_troco").value.trim()===""?0:parseNum($("#ab_troco").value);
+    if(!(t>=0)) return $("#ab_err").textContent="Valor inválido.";
+    CAIXAS.push({id:CAIXAS.reduce((m,x)=>Math.max(m,x.id),0)+1,data:hojeISO(),hora:horaAgora(),user:SESSION.name,troco:+t.toFixed(2),movs:[]});
+    closeModal(); toast(`Caixa aberto com ${brl(t)} de troco.`); onOk&&onOk(); };
+  $("#ab_ok").addEventListener("click",go);
+  $("#ab_troco").addEventListener("keydown",e=>{if(e.key==="Enter")go();});
+  setTimeout(()=>{$("#ab_troco")?.focus();$("#ab_troco")?.select();},50);
+}
+function modalMovCaixa(tipo){
+  const c=caixaAberto(); if(!c) return;
+  const s=tipo==="sangria";
+  modal(`<h3>${s?"Sangria (tirar dinheiro do caixa)":"Reforço (colocar troco no caixa)"}</h3>
+    <div class="field"><label>Valor (R$) <span class="req">*</span></label><input class="inp" id="mv_val" inputmode="decimal" placeholder="0,00" style="font-size:18px"></div>
+    <div class="field"><label>Motivo</label><input class="inp" id="mv_mot" placeholder="${s?"Ex.: depósito no banco / pagamento motoboy":"Ex.: troco do cofre"}"></div>
+    <div class="err" id="mv_err"></div>
+    <div class="row"><button class="btn ghost" data-close>Cancelar</button><button class="btn" id="mv_ok">Registrar</button></div>`);
+  const go=()=>{ const v=parseNum($("#mv_val").value);
+    if(!(v>0)) return $("#mv_err").textContent="Informe o valor.";
+    c.movs=c.movs||[]; c.movs.push({tipo,valor:+v.toFixed(2),motivo:$("#mv_mot").value.trim(),user:SESSION.name,hora:horaAgora()});
+    closeModal(); viewCaixa(); toast(`${s?"Sangria":"Reforço"} de ${brl(v)} registrada.`); };
+  $("#mv_ok").addEventListener("click",go);
+  ["mv_val","mv_mot"].forEach(id=>$("#"+id).addEventListener("keydown",e=>{if(e.key==="Enter")go();}));
+  setTimeout(()=>$("#mv_val")?.focus(),50);
+}
+// fechamento: quem não é administrador conta "às cegas" (só vê o esperado depois de informar o que contou)
+function modalFecharCaixa(){
+  const c=caixaAberto(); if(!c) return;
+  const r=caixaResumo(c), isAdmin=ADM();
+  const outras=Object.entries(r.porPay).filter(([k])=>k!=="Dinheiro");
+  modal(`<h3>Fechar caixa</h3>
+    <div class="infobox" style="gap:4px">
+      ${miniStat("Vendas no caixa",`${brl(r.total)} · ${r.n} venda(s)`)}
+      ${outras.map(([k,v])=>miniStat(`${esc(k)} <span class="hint">(confira na maquininha / banco)</span>`,brl(v))).join("")}
+      ${isAdmin?miniStat("Dinheiro esperado na gaveta",brl(r.esperado)):""}
+    </div>
+    ${isAdmin?`<div class="hint">Troco ${brl(c.troco)} + vendas em dinheiro ${brl(r.porPay["Dinheiro"]||0)} + reforços ${brl(r.ref)} − sangrias ${brl(r.sang)}${r.devDin?` − devoluções ${brl(r.devDin)}`:""}</div>`:""}
+    <div class="g g2">
+      <div class="field"><label>Dinheiro contado na gaveta (R$) <span class="req">*</span></label><input class="inp" id="fc_cont" inputmode="decimal" placeholder="0,00" style="font-size:18px"></div>
+      <div class="field"><label>Fica na gaveta para amanhã (troco)</label><input class="inp" id="fc_fica" inputmode="decimal" placeholder="0,00"></div>
+    </div>
+    <div class="field"><label>Observação</label><input class="inp" id="fc_obs" placeholder="Ex.: R$ 5 de troco dado a mais"></div>
+    <div id="fc_dif"></div>
+    <div class="err" id="fc_err"></div>
+    <div class="row"><button class="btn ghost" data-close>Cancelar</button><button class="btn" id="fc_ok">Fechar caixa</button></div>`);
+  if(isAdmin) $("#fc_cont").addEventListener("input",()=>{ const v=parseNum($("#fc_cont").value);
+    $("#fc_dif").innerHTML=v>=0?`<div style="display:flex;gap:8px;align-items:center;font-size:13px">Diferença: ${difTxt(+(v-r.esperado).toFixed(2))}</div>`:""; });
+  $("#fc_ok").addEventListener("click",()=>{
+    const cont=parseNum($("#fc_cont").value); if(!(cont>=0)) return $("#fc_err").textContent="Informe o dinheiro contado na gaveta.";
+    const fv=$("#fc_fica").value.trim(), fica=fv===""?null:parseNum(fv);
+    if(fica!=null&&!(fica>=0&&fica<=cont)) return $("#fc_err").textContent="O que fica na gaveta não pode passar do contado.";
+    const rr=caixaResumo(c); // recalcula na hora de fechar
+    c.fech={data:hojeISO(),hora:horaAgora(),user:SESSION.name,contado:+cont.toFixed(2),esperado:rr.esperado,dif:+(cont-rr.esperado).toFixed(2),
+      fica:fica==null?null:+fica.toFixed(2),obs:$("#fc_obs").value.trim(),resumo:rr};
+    modal(`<h3>Caixa fechado</h3>
+      <div class="infobox" style="gap:4px">
+        ${miniStat("Dinheiro esperado",brl(c.fech.esperado))}${miniStat("Dinheiro contado",brl(c.fech.contado))}
+        <div style="display:flex;justify-content:space-between;align-items:center;font-size:13px"><span style="color:var(--muted)">Diferença</span>${difTxt(c.fech.dif)}</div>
+      </div>
+      <div class="row"><button class="btn ghost" data-close>OK</button><button class="btn" id="fc_print">${ICO_PRINT}Imprimir resumo</button></div>`);
+    $("#fc_print").addEventListener("click",()=>{imprimirCaixa(c);closeModal();});
+    viewCaixa();
+  });
+  setTimeout(()=>$("#fc_cont")?.focus(),50);
+}
+function imprimirCaixa(c){
+  if(!c||!c.fech) return;
+  const f=c.fech, r=f.resumo;
+  const lin=(l,v)=>`<tr><td>${l}</td><td class="n">${v}</td></tr>`;
+  imprimirRelatorio(`Fechamento de caixa ${fmtDate(c.data)}`,`
+    <div class="meta">Aberto em ${fmtDate(c.data)} ${esc(c.hora)} por ${esc(c.user)} · fechado em ${fmtDate(f.data)} ${esc(f.hora)} por ${esc(f.user)}</div>
+    <div class="resumo"><div><small>Vendas</small><b>${brl(r.total)}</b></div><div><small>Esperado (dinheiro)</small><b>${brl(f.esperado)}</b></div>
+      <div><small>Contado</small><b>${brl(f.contado)}</b></div><div><small>Diferença</small><b class="${Math.abs(f.dif)<0.005?"":f.dif<0?"crit":"warn"}">${f.dif>0?"+":""}${brl(f.dif)}</b></div></div>
+    <table><tbody>
+      ${Object.entries(r.porPay).map(([k,v])=>lin(`Vendas em ${esc(k)}`,brl(v))).join("")}
+      ${lin("Quantidade de vendas",r.n)}
+      ${r.vales?lin("Vale-troca usado (não é dinheiro novo)",brl(r.vales)):""}
+      ${lin("Troco inicial",brl(c.troco))}${lin("Reforços",brl(r.ref))}${lin("Sangrias",brl(r.sang))}
+      ${r.devDin?lin("Devoluções em dinheiro",brl(r.devDin)):""}
+      ${f.fica!=null?lin("Fica na gaveta para o próximo dia",brl(f.fica)):""}
+    </tbody></table>
+    ${(c.movs||[]).length?`<h1 style="font-size:12px;margin-top:12px">Sangrias e reforços</h1><table><tbody>${c.movs.map(m=>`<tr><td>${esc(m.hora)}</td><td>${m.tipo==="sangria"?"Sangria":"Reforço"}</td><td>${esc(m.motivo||"")}</td><td>${esc(m.user)}</td><td class="n">${brl(m.valor)}</td></tr>`).join("")}</tbody></table>`:""}
+    ${f.obs?`<div class="aviso">${esc(f.obs)}</div>`:""}
+    <div class="ass"><div>Responsável pelo caixa</div><div>Conferido por</div></div>`,"portrait");
 }
 
 /* ---------------- CATEGORIAS (admin) ---------------- */
@@ -2883,6 +3215,8 @@ const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
     mes:       [()=>MES,         v=>{Object.keys(MES).forEach(k=>delete MES[k]);Object.assign(MES,v);}],
     comissao:  [()=>COMISSAO,    v=>{COMISSAO.splice(0,COMISSAO.length,...v);}],
     saidas:    [()=>SAIDAS,      v=>{SAIDAS=v;}], // condicional / costureira
+    devolucoes:[()=>DEVOLUCOES,  v=>{DEVOLUCOES=v;}], // trocas / vale-troca
+    caixas:    [()=>CAIXAS,      v=>{CAIXAS=v;}],     // abertura e fechamento de caixa
   };
   const saved={}, verLocal={};
   for(const k in KEYS) saved[k]=JSON.stringify(KEYS[k][0]());
