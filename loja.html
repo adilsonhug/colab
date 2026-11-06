@@ -138,6 +138,36 @@ header{position:sticky;top:0;z-index:20;background:#0b0b0b;color:#fff;padding-to
 footer{border-top:1px solid var(--border);padding:22px 0 calc(28px + env(safe-area-inset-bottom,0));color:var(--muted);font-size:13px}
 footer .wrap{display:flex;flex-wrap:wrap;gap:8px 20px;justify-content:space-between}
 footer a{color:inherit}
+/* galeria do produto */
+.gal{position:relative;background:var(--surface-2);min-width:0}
+.prod>*{min-width:0}
+.galv{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;scrollbar-width:none;aspect-ratio:1/1}
+.galv::-webkit-scrollbar{display:none}
+.gi{flex:0 0 100%;scroll-snap-align:start;overflow:hidden;position:relative;cursor:zoom-in;display:grid;place-items:center}
+.gi img{width:100%;height:100%;object-fit:cover;opacity:0;transition:opacity .25s}
+.gi img.ok{opacity:1}
+.gi.zoom img{transition:none}
+.galt{display:flex;gap:6px;padding:8px;justify-content:center}
+.galt button{width:52px;height:52px;border-radius:8px;overflow:hidden;border:2px solid transparent;padding:0;background:var(--surface);cursor:pointer;opacity:.6}
+.galt button.on{border-color:var(--fg);opacity:1}
+.galt img{width:100%;height:100%;object-fit:cover}
+.dots{position:absolute;left:0;right:0;bottom:10px;display:flex;justify-content:center;gap:6px;pointer-events:none}
+.dots i{width:7px;height:7px;border-radius:9px;background:#fff;opacity:.55;box-shadow:0 0 2px #0008}
+.dots i.on{opacity:1}
+.zdica{position:absolute;right:10px;top:10px;background:rgba(0,0,0,.6);color:#fff;font-size:11px;font-weight:700;padding:4px 9px;border-radius:999px;pointer-events:none}
+@media (min-width:720px){.dots{display:none}}
+@media (max-width:719px){.galt{display:none}}
+/* zoom em tela cheia */
+.lb{position:fixed;inset:0;z-index:70;background:#000;display:flex;flex-direction:column;color:#fff;user-select:none;-webkit-user-select:none}
+.lbst{flex:1;position:relative;overflow:hidden;touch-action:none;display:grid;place-items:center;cursor:zoom-in}
+.lbst.z{cursor:grab}
+.lbst img{max-width:100%;max-height:100%;width:100%;height:100%;object-fit:contain;transform-origin:center center;will-change:transform;-webkit-user-drag:none;pointer-events:none}
+.lbtop{position:absolute;left:0;right:0;top:0;display:flex;justify-content:space-between;align-items:center;padding:calc(10px + env(safe-area-inset-top,0)) 12px 10px;z-index:2;background:linear-gradient(#000a,transparent)}
+.lbtop .x{background:rgba(255,255,255,.15);color:#fff}
+.lbseta{position:absolute;top:50%;transform:translateY(-50%);z-index:2;width:44px;height:44px;border-radius:999px;border:0;background:rgba(255,255,255,.15);color:#fff;font-size:22px;cursor:pointer}
+.lbseta.e{left:12px}.lbseta.d{right:12px}
+.lbdica{position:absolute;left:0;right:0;bottom:calc(14px + env(safe-area-inset-bottom,0));text-align:center;font-size:12px;opacity:.75;pointer-events:none}
+@media (hover:none){.lbseta{display:none}}
 .carreg{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
 @media (min-width:720px){.carreg{grid-template-columns:repeat(4,1fr)}}
 .carreg div{aspect-ratio:3/4;border-radius:14px;background:var(--surface-2);animation:pul 1.2s ease-in-out infinite alternate}
@@ -181,6 +211,9 @@ async function carregar(){
   LOJA=(data&&data.loja)||{}; PRODS=((data&&data.prods)||[]).map(p=>({...p,tams:p.tams||[]}));
 }
 const disp=p=>p.tams.filter(t=>t.ok);
+const maxDe=t=>t&&t.ok?Math.max(1,+t.n||10):0; // até quantas dá para pedir nesse tamanho
+const naSacola=(id,tam,exceto)=>SACOLA.filter(i=>i.id===id&&i.tam===tam&&i!==exceto).reduce((s,i)=>s+i.qtd,0);
+const fotosP=p=>p.fotos&&p.fotos.length?p.fotos:(p.foto?[p.foto]:[]);
 const precoDe=p=>{ const d=disp(p); return d.length?Math.min(...d.map(t=>+t.preco||0)):+p.preco||0; };
 async function buscaFotos(refs){
   const falta=[...new Set(refs.filter(r=>r&&!(r in FOTOS)))]; if(!falta.length) return;
@@ -241,8 +274,12 @@ function abreProduto(id,tamPre){
   const p=PRODS.find(x=>x.id===id); if(!p) return;
   const outras=PRODS.filter(x=>x.nome===p.nome&&x.cat===p.cat);
   const d=disp(p); let tam=tamPre&&d.some(t=>t.t===tamPre)?tamPre:(d.length===1?d[0].t:""), qtd=1;
+  const fs=fotosP(p);
   abrePainel(`<div class="ph"><h2>${esc(p.cat||"Produto")}</h2><button class="x" data-fecha aria-label="Fechar">×</button></div>
-    <div class="prod">${fotoHTML(p,d.length?"":"Esgotado")}
+    <div class="prod">${fs.length?`<div class="gal"><div class="galv" id="galv">${fs.map((r,k)=>`<div class="gi" data-gi="${k}"><img data-f="${esc(r)}" alt="${esc(p.nome)} — foto ${k+1}"></div>`).join("")}</div>
+        ${d.length?"":`<span class="tag">Esgotado</span>`}<span class="zdica">🔍 ${matchMedia("(hover:hover)").matches?"passe o mouse · clique para ampliar":"toque para ampliar"}</span>
+        ${fs.length>1?`<div class="dots">${fs.map((r,k)=>`<i class="${k?"":"on"}"></i>`).join("")}</div><div class="galt">${fs.map((r,k)=>`<button data-gt="${k}" class="${k?"":"on"}" aria-label="Foto ${k+1}"><img data-f="${esc(r)}" alt=""></button>`).join("")}</div>`:""}</div>`
+      :fotoHTML(p,d.length?"":"Esgotado")}
       <div class="dados">
         <div><h3>${esc(p.nome)}</h3><div style="color:var(--muted)">${esc(p.cor||"")}</div></div>
         <div class="pr" id="pp">${brl(precoDe(p))}</div>
@@ -254,24 +291,99 @@ function abreProduto(id,tamPre){
         <button class="btn" id="add" ${d.length?"":"disabled"}>${d.length?"Adicionar à sacola":"Esgotado"}</button>
         ${!d.length&&LOJA.whats?`<a class="btn lin" style="text-align:center;text-decoration:none" target="_blank" rel="noopener" href="https://wa.me/55${esc(LOJA.whats)}?text=${encodeURIComponent(`Olá! Vai chegar ${p.nome} ${p.cor||""}?`)}">Perguntar se vai chegar</a>`:""}
       </div></div>`);
+  // quanto ainda dá para pôr na sacola nesse tamanho (o que já está nela conta)
+  const resta=()=>{ const t=p.tams.find(x=>x.t===tam); return t?Math.max(0,maxDe(t)-naSacola(p.id,tam)):10; };
   const pinta=()=>{ document.querySelectorAll(".tamsel button").forEach(b=>b.classList.toggle("on",b.dataset.t===tam));
-    const t=p.tams.find(x=>x.t===tam); $("#pp").textContent=brl(t?t.preco:precoDe(p)); $("#qn").textContent=qtd; };
-  document.querySelectorAll(".tamsel button").forEach(b=>b.onclick=()=>{ tam=b.dataset.t; $("#perr").textContent=""; pinta(); });
-  document.querySelectorAll("[data-q]").forEach(b=>b.onclick=()=>{ qtd=Math.min(10,Math.max(1,qtd+ +b.dataset.q)); pinta(); });
+    const t=p.tams.find(x=>x.t===tam); $("#pp").textContent=brl(t?t.preco:precoDe(p));
+    if(tam&&qtd>resta()) qtd=Math.max(1,resta()); $("#qn").textContent=qtd; };
+  document.querySelectorAll(".tamsel button").forEach(b=>b.onclick=()=>{ tam=b.dataset.t; $("#perr").textContent=""; pinta();
+    if(!resta()) $("#perr").textContent="Você já colocou na sacola todas as peças desse tamanho."; });
+  document.querySelectorAll("[data-q]").forEach(b=>b.onclick=()=>{ const lim=tam?resta():10, nv=qtd+ +b.dataset.q;
+    if(tam&&nv>lim){ $("#perr").textContent=lim?`Temos só ${lim+naSacola(p.id,tam)} peça(s) nesse tamanho.`:"Você já colocou na sacola todas as peças desse tamanho."; return; }
+    $("#perr").textContent=""; qtd=Math.min(10,Math.max(1,nv)); pinta(); });
   document.querySelectorAll("[data-cor]").forEach(b=>b.onclick=()=>abreProduto(b.dataset.cor,tam));
   $("#add").onclick=()=>{
     if(!tam) return $("#perr").textContent="Escolha o tamanho.";
-    const t=p.tams.find(x=>x.t===tam);
-    const ja=SACOLA.find(i=>i.id===p.id&&i.tam===tam); ja?ja.qtd=Math.min(10,ja.qtd+qtd):SACOLA.push({id:p.id,tam,qtd,sku:t.sku});
-    salvaSacola(); fecha(); toast("Adicionado à sacola."); };
-  pinta(); observaFotos($("#host"));
+    const t=p.tams.find(x=>x.t===tam), lim=resta();
+    if(!lim) return $("#perr").textContent="Você já colocou na sacola todas as peças desse tamanho.";
+    const q=Math.min(qtd,lim);
+    const ja=SACOLA.find(i=>i.id===p.id&&i.tam===tam); ja?ja.qtd+=q:SACOLA.push({id:p.id,tam,qtd:q,sku:t.sku});
+    salvaSacola(); fecha(); toast(q<qtd?`Adicionado ${q} — é o que temos nesse tamanho.`:"Adicionado à sacola."); };
+  pinta(); observaFotos($("#host")); galeria(fs);
+}
+// galeria: deslizar entre as fotos, lupa ao passar o mouse, toque/clique abre o zoom em tela cheia
+function galeria(fs){
+  const v=$("#galv"); if(!v) return;
+  const marca=k=>{ document.querySelectorAll(".dots i").forEach((d,j)=>d.classList.toggle("on",j===k)); document.querySelectorAll("[data-gt]").forEach((b,j)=>b.classList.toggle("on",j===k)); };
+  v.addEventListener("scroll",()=>marca(Math.round(v.scrollLeft/v.clientWidth)),{passive:true});
+  document.querySelectorAll("[data-gt]").forEach(b=>b.onclick=()=>{ v.scrollTo({left:+b.dataset.gt*v.clientWidth,behavior:"smooth"}); marca(+b.dataset.gt); });
+  const lupa=matchMedia("(hover:hover) and (pointer:fine)").matches;
+  v.querySelectorAll(".gi").forEach(g=>{ const img=g.querySelector("img");
+    if(lupa){
+      g.addEventListener("mousemove",e=>{ const r=g.getBoundingClientRect(); g.classList.add("zoom");
+        img.style.transformOrigin=`${(e.clientX-r.left)/r.width*100}% ${(e.clientY-r.top)/r.height*100}%`; img.style.transform="scale(2.4)"; });
+      g.addEventListener("mouseleave",()=>{ g.classList.remove("zoom"); img.style.transform=""; });
+    }
+    g.addEventListener("click",()=>abreZoom(fs,+g.dataset.gi));
+  });
+}
+function abreZoom(fs,ini){
+  let i=ini, s=1, tx=0, ty=0, g0=null, arr=null, ultTap=0;
+  const pts=new Map(), dist=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
+  const el=document.createElement("div"); el.className="lb";
+  el.innerHTML=`<div class="lbtop"><span id="lbn" style="font-weight:700;font-size:14px"></span><button class="x" id="lbx" aria-label="Fechar">×</button></div>
+    <div class="lbst" id="lbst"><img id="lbimg" alt=""></div>
+    ${fs.length>1?`<button class="lbseta e" id="lbe" aria-label="Foto anterior">‹</button><button class="lbseta d" id="lbd" aria-label="Próxima foto">›</button>`:""}
+    <div class="lbdica">${matchMedia("(hover:none)").matches?"Afaste dois dedos para aproximar · toque duas vezes para ampliar":"Clique para ampliar · role a rodinha do mouse · arraste para ver os detalhes"}</div>`;
+  document.body.appendChild(el);
+  const st=el.querySelector("#lbst"), img=el.querySelector("#lbimg");
+  const aplica=anim=>{ img.style.transition=anim?"transform .22s ease":"none"; img.style.transform=`translate(${tx}px,${ty}px) scale(${s})`; st.classList.toggle("z",s>1); };
+  const limita=()=>{ const r=st.getBoundingClientRect(), mx=(s-1)*r.width/2, my=(s-1)*r.height/2; tx=Math.max(-mx,Math.min(mx,tx)); ty=Math.max(-my,Math.min(my,ty)); };
+  const zoomEm=(cx,cy,s2)=>{ s2=Math.max(1,Math.min(5,s2)); const r=st.getBoundingClientRect(), px=cx-r.left-r.width/2, py=cy-r.top-r.height/2;
+    tx=px-(px-tx)*(s2/s); ty=py-(py-ty)*(s2/s); s=s2; if(s<=1.01){ s=1; tx=ty=0; } limita(); };
+  const mostra=k=>{ i=(k+fs.length)%fs.length; s=1; tx=ty=0; aplica(); el.querySelector("#lbn").textContent=fs.length>1?`${i+1} / ${fs.length}`:"";
+    const r=fs[i]; img.src=FOTOS[r]||""; if(!FOTOS[r]) buscaFotos([r]).then(()=>{ if(fs[i]===r) img.src=FOTOS[r]||""; }); };
+  const fechaZ=()=>{ el.remove(); removeEventListener("keydown",tecla,true); };
+  const tecla=e=>{ if(e.key==="Escape"){ e.stopImmediatePropagation(); fechaZ(); } else if(e.key==="ArrowRight") mostra(i+1); else if(e.key==="ArrowLeft") mostra(i-1); };
+  addEventListener("keydown",tecla,true);
+  el.querySelector("#lbx").onclick=fechaZ;
+  if(fs.length>1){ el.querySelector("#lbe").onclick=()=>mostra(i-1); el.querySelector("#lbd").onclick=()=>mostra(i+1); }
+  st.addEventListener("pointerdown",e=>{ try{ st.setPointerCapture(e.pointerId); }catch(x){} pts.set(e.pointerId,{x:e.clientX,y:e.clientY});
+    if(pts.size===2){ const [a,b]=[...pts.values()]; g0={d:dist(a,b)||1,s,tx,ty,cx:(a.x+b.x)/2,cy:(a.y+b.y)/2}; arr=null; }
+    else if(pts.size===1) arr={x:e.clientX,y:e.clientY,tx,ty,mov:false}; });
+  st.addEventListener("pointermove",e=>{ if(!pts.has(e.pointerId)) return; pts.set(e.pointerId,{x:e.clientX,y:e.clientY});
+    if(pts.size>=2&&g0){ const [a,b]=[...pts.values()]; s=g0.s; tx=g0.tx; ty=g0.ty; zoomEm(g0.cx,g0.cy,g0.s*dist(a,b)/g0.d); aplica(); return; }
+    if(!arr) return; const dx=e.clientX-arr.x, dy=e.clientY-arr.y; if(Math.abs(dx)+Math.abs(dy)>6) arr.mov=true;
+    if(s>1){ tx=arr.tx+dx; ty=arr.ty+dy; limita(); aplica(); }
+    else if(fs.length>1){ img.style.transition="none"; img.style.transform=`translateX(${dx}px)`; } });
+  const solta=e=>{ if(!pts.has(e.pointerId)) return; pts.delete(e.pointerId);
+    if(pts.size===1){ g0=null; const [p]=[...pts.values()]; arr={x:p.x,y:p.y,tx,ty,mov:true}; return; }
+    if(pts.size||!arr){ g0=null; return; }
+    const dx=e.clientX-arr.x;
+    if(s===1&&arr.mov&&Math.abs(dx)>50&&fs.length>1) mostra(i+(dx<0?1:-1));
+    else if(!arr.mov){ const ag=Date.now();
+      if(e.pointerType==="mouse"||ag-ultTap<320){ zoomEm(e.clientX,e.clientY,s>1?1:2.6); aplica(true); ultTap=0; } else ultTap=ag; }
+    else if(s===1) aplica(true);
+    arr=null; g0=null; };
+  st.addEventListener("pointerup",solta); st.addEventListener("pointercancel",solta);
+  st.addEventListener("wheel",e=>{ e.preventDefault(); zoomEm(e.clientX,e.clientY,s*(e.deltaY<0?1.25:1/1.25)); aplica(); },{passive:false});
+  mostra(ini);
 }
 
 /* ---------- sacola ---------- */
 function salvaSacola(){ ls.set("colab_sacola",SACOLA); $("#nSacola").textContent=SACOLA.reduce((s,i)=>s+i.qtd,0); }
 function linhas(){ return SACOLA.map(i=>{ const p=PRODS.find(x=>x.id===i.id), t=p&&p.tams.find(x=>x.t===i.tam);
   return {i,p,t,ok:!!(p&&t&&t.ok),preco:t?+t.preco||0:0}; }); }
-function abreSacola(){
+// ajusta a sacola ao estoque atual; devolve true se precisou diminuir alguma peça
+function ajustaSacola(){
+  let mudou=false;
+  SACOLA.forEach(i=>{ const p=PRODS.find(x=>x.id===i.id), t=p&&p.tams.find(x=>x.t===i.tam); if(!t||!t.ok) return;
+    const lim=maxDe(t)-naSacola(i.id,i.tam,i); if(i.qtd>lim){ i.qtd=Math.max(0,lim); mudou=true; } });
+  const antes=SACOLA.length; SACOLA=SACOLA.filter(i=>i.qtd>0); if(SACOLA.length!==antes) mudou=true;
+  if(mudou) salvaSacola(); return mudou;
+}
+function abreSacola(aviso){
+  if(ajustaSacola()&&!aviso) aviso="Algumas quantidades foram ajustadas ao estoque disponível.";
   const L=linhas(), validas=L.filter(l=>l.ok);
   const sub=validas.reduce((s,l)=>s+l.preco*l.i.qtd,0);
   const ret=LOJA.retirada!==false, ent=!!LOJA.entrega;
@@ -295,12 +407,14 @@ function abreSacola(){
         <div class="tot"><span>Peças</span><span>${brl(sub)}</span></div>
         <div class="tot" id="ttx" ${modo==="entregar"?"":"hidden"}><span>Entrega</span><span>${LOJA.taxa?brl(LOJA.taxa):"a combinar"}</span></div>
         <div class="tot g"><span>Total</span><span id="tg">${brl(sub+(modo==="entregar"?+LOJA.taxa||0:0))}</span></div>
-        <div class="err" id="serr"></div>
+        <div class="err" id="serr">${esc(aviso||"")}</div>
         <button class="btn wa" id="enviar" ${validas.length?"":"disabled"}>Enviar pedido pelo WhatsApp</button>
         <div class="nota">O pagamento (Pix, cartão ou link) é combinado com a loja pelo WhatsApp.</div>
       </div>`
     :`<div class="vazio"><b>Sacola vazia</b>Escolha uma peça e o tamanho para começar.<div style="margin-top:16px"><button class="btn esc" data-fecha style="width:auto">Ver peças</button></div></div>`}`,true);
-  document.querySelectorAll("[data-sq]").forEach(b=>b.onclick=()=>{ const i=SACOLA[+b.dataset.sq]; i.qtd=Math.min(10,Math.max(1,i.qtd+ +b.dataset.d)); salvaSacola(); abreSacola(); });
+  document.querySelectorAll("[data-sq]").forEach(b=>b.onclick=()=>{ const l=L[+b.dataset.sq], i=l.i, d=+b.dataset.d;
+    if(d>0&&l.t&&i.qtd+naSacola(i.id,i.tam,i)>=maxDe(l.t)) return abreSacola(`Temos só ${maxDe(l.t)} peça(s) de ${l.p.nome} no tamanho ${i.tam}.`);
+    i.qtd=Math.max(1,i.qtd+d); salvaSacola(); abreSacola(); });
   document.querySelectorAll("[data-rm]").forEach(b=>b.onclick=()=>{ SACOLA.splice(+b.dataset.rm,1); salvaSacola(); abreSacola(); });
   document.querySelectorAll("input[name=modo]").forEach(r=>r.onchange=()=>{ modo=r.value; $("#fend").hidden=modo!=="entregar"; $("#ttx").hidden=modo!=="entregar";
     $("#tg").textContent=brl(sub+(modo==="entregar"?+LOJA.taxa||0:0)); });
@@ -316,8 +430,10 @@ async function enviar(modo){
   if(!LOJA.whats) return err("A loja ainda não configurou o WhatsApp. Tente mais tarde.");
   const b=$("#enviar"); b.disabled=true; b.textContent="Conferindo estoque…";
   try{ await carregar(); }catch(e){}
-  const L=linhas(), ok=L.filter(l=>l.ok);
-  if(ok.length!==L.length){ SACOLA=ok.map(l=>l.i); salvaSacola(); render(); abreSacola(); $("#serr").textContent="Algumas peças esgotaram e saíram da sacola. Confira e envie de novo."; return; }
+  let L=linhas(), ok=L.filter(l=>l.ok);
+  if(ok.length!==L.length){ SACOLA=ok.map(l=>l.i); salvaSacola(); render(); abreSacola("Algumas peças esgotaram e saíram da sacola. Confira e envie de novo."); return; }
+  if(ajustaSacola()){ render(); abreSacola("O estoque mudou e algumas quantidades foram ajustadas. Confira e envie de novo."); return; }
+  L=linhas(); ok=L.filter(l=>l.ok);
   CLI={nome,tel,end,modo}; ls.set("colab_cliente",CLI);
   const taxa=modo==="entregar"?+LOJA.taxa||0:0, sub=ok.reduce((s,l)=>s+l.preco*l.i.qtd,0);
   const itens=ok.map(l=>({id:l.p.id,sku:l.t.sku,nome:l.p.nome,cor:l.p.cor,tam:l.i.tam,qtd:l.i.qtd,preco:l.preco}));
@@ -341,7 +457,7 @@ async function enviar(modo){
 
 /* ---------- início ---------- */
 $("#q").addEventListener("input",e=>{ F.q=e.target.value; render(); });
-$("#abreSacola").addEventListener("click",abreSacola);
+$("#abreSacola").addEventListener("click",()=>abreSacola());
 salvaSacola();
 (async()=>{
   if(!window.supabase){ $("#vitrine").innerHTML=`<div class="vazio"><b>Sem conexão</b>Verifique a internet e recarregue a página.</div>`; return; }
