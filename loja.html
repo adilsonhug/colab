@@ -111,8 +111,10 @@ header{position:sticky;top:0;z-index:20;background:#0b0b0b;color:#fff;padding-to
 .wa{background:#1f9d63}
 .desc{color:var(--muted);font-size:14px;white-space:pre-line}
 .itens{padding:6px 16px}
-.it{display:grid;grid-template-columns:64px 1fr auto;gap:10px;align-items:center;padding:10px 0;border-bottom:1px solid var(--border)}
-.it .mini{width:64px;height:64px;border-radius:10px;overflow:hidden;background:var(--surface-2)}
+.it{display:grid;grid-template-columns:56px minmax(0,1fr) auto;gap:10px;align-items:center;padding:10px 0;border-bottom:1px solid var(--border)}
+.it>div{min-width:0}
+.it>div>div{flex-wrap:wrap}
+.it .mini{width:56px;height:56px;border-radius:10px;overflow:hidden;background:var(--surface-2)}
 .it .mini img{width:100%;height:100%;object-fit:cover}
 .it b{font-size:14px;display:block;line-height:1.2}
 .it small{color:var(--muted)}
@@ -128,6 +130,8 @@ header{position:sticky;top:0;z-index:20;background:#0b0b0b;color:#fff;padding-to
 .opc label small{font-weight:500;color:var(--muted);font-size:12px}
 .opc input{display:none}
 .opc label:has(input:checked){border-color:var(--fg);background:var(--surface-2)}
+.g2f{display:grid;grid-template-columns:110px 1fr;gap:10px}
+.g2f .f{min-width:0}
 .tot{display:flex;justify-content:space-between;font-size:14px;color:var(--muted)}
 .tot.g{font-size:18px;color:var(--fg);font-weight:800;font-family:var(--font-display)}
 .err{color:var(--crit);font-size:13px;font-weight:600;min-height:1em}
@@ -403,8 +407,14 @@ function abreSacola(aviso){
         <div class="f"><label for="cn">Seu nome *</label><input id="cn" autocomplete="name" value="${esc(CLI.nome||"")}"></div>
         <div class="f"><label for="ct">WhatsApp com DDD *</label><input id="ct" inputmode="tel" autocomplete="tel" placeholder="(49) 9…" value="${esc(CLI.tel||"")}"></div>
         <div id="fend" ${modo==="entregar"?"":"hidden"} style="display:flex;flex-direction:column;gap:12px">
-          <div class="f"><label for="cu">Estado *</label><select id="cu" style="width:100%;border:1px solid var(--border);border-radius:10px;padding:12px;background:var(--bg);font-size:15px"><option value="">Selecione…</option>${UFS.map(u=>`<option ${CLI.uf===u?"selected":""}>${u}</option>`).join("")}</select></div>
-          <div class="f"><label for="ce">Endereço de entrega *</label><input id="ce" autocomplete="street-address" placeholder="Rua, número, bairro, cidade, CEP" value="${esc(CLI.end||"")}"></div>
+          <div class="f"><label for="cc">CEP *</label><input id="cc" inputmode="numeric" autocomplete="postal-code" placeholder="00000-000" maxlength="9" value="${esc(CLI.cep?fmtCep(CLI.cep):"")}">
+            <small id="ccst" style="font-size:12px;color:var(--muted)">Digite o CEP e o endereço é preenchido sozinho. <a href="https://buscacepinter.correios.com.br/" target="_blank" rel="noopener" style="color:inherit">Não sei meu CEP</a></small></div>
+          <div class="f"><label for="cr">Rua *</label><input id="cr" autocomplete="address-line1" value="${esc(CLI.rua||"")}"></div>
+          <div class="g2f"><div class="f"><label for="cnum">Número *</label><input id="cnum" inputmode="numeric" value="${esc(CLI.num||"")}"></div>
+            <div class="f"><label for="ccp">Complemento</label><input id="ccp" placeholder="Apto, bloco…" autocomplete="address-line2" value="${esc(CLI.comp||"")}"></div></div>
+          <div class="f"><label for="cb">Bairro *</label><input id="cb" value="${esc(CLI.bairro||"")}"></div>
+          <div class="g2f" style="grid-template-columns:1fr 92px"><div class="f"><label for="cci">Cidade *</label><input id="cci" autocomplete="address-level2" value="${esc(CLI.cidade||"")}"></div>
+            <div class="f"><label for="cu">Estado *</label><select id="cu" style="width:100%;border:1px solid var(--border);border-radius:10px;padding:12px 8px;background:var(--bg);font-size:15px"><option value="">UF</option>${UFS.map(u=>`<option ${CLI.uf===u?"selected":""}>${u}</option>`).join("")}</select></div></div>
         </div>
         <div class="f"><label for="co">Observação</label><textarea id="co" rows="2" placeholder="Opcional"></textarea></div>
         <div class="tot"><span>Peças</span><span>${brl(sub)}</span></div>
@@ -425,6 +435,20 @@ function abreSacola(aviso){
     $("#tg").textContent=brl(sub+f.taxa); $("#fgaviso").innerHTML=modo==="entregar"?f.aviso:""; };
   document.querySelectorAll("input[name=modo]").forEach(r=>r.onchange=()=>{ modo=r.value; $("#fend").hidden=modo!=="entregar"; $("#ttx").hidden=modo!=="entregar"; conta(); });
   $("#cu")?.addEventListener("change",conta); conta();
+  const cc=$("#cc"); if(cc){
+    let ultimo="";
+    const busca=async()=>{ const d=cc.value.replace(/\D/g,"").slice(0,8); cc.value=fmtCep(d);
+      if(d.length<8||d===ultimo) return; ultimo=d;
+      const stt=$("#ccst"); stt.style.color="var(--muted)"; stt.textContent="Buscando endereço…";
+      const r=await buscaCep(d); if(cc.value.replace(/\D/g,"")!==d) return;
+      if(!r){ stt.style.color="var(--crit)"; stt.textContent="CEP não encontrado. Confira o número ou preencha o endereço abaixo."; return; }
+      if(r.logradouro) $("#cr").value=r.logradouro; if(r.bairro) $("#cb").value=r.bairro;
+      $("#cci").value=r.localidade||""; $("#cu").value=r.uf||""; conta();
+      stt.style.color="var(--good)"; stt.textContent=`✓ ${r.localidade}/${r.uf}`;
+      ($("#cr").value?$("#cnum"):$("#cr")).focus(); };
+    cc.addEventListener("input",busca);
+    if(cc.value.replace(/\D/g,"").length===8&&!$("#cci").value) busca();
+  }
   const env=$("#enviar"); if(env) env.onclick=()=>enviar(modo);
   observaFotos($("#host"));
 }
@@ -442,13 +466,30 @@ function frete(modo,uf,sub){
   }
   return {taxa:regiao||!min?base:(uf?0:base),gratis:false,aviso,combinar:!!uf&&!regiao&&min>0};
 }
+const fmtCep=d=>{ d=String(d||"").replace(/\D/g,"").slice(0,8); return d.length>5?d.slice(0,5)+"-"+d.slice(5):d; };
+// endereço pelo CEP (ViaCEP, serviço público e gratuito)
+const CEPS={};
+async function buscaCep(d){
+  if(d in CEPS) return CEPS[d];
+  try{ const r=await fetch(`https://viacep.com.br/ws/${d}/json/`); const j=await r.json(); CEPS[d]=j&&!j.erro?j:null; }catch(e){ return null; }
+  return CEPS[d];
+}
 async function enviar(modo){
-  const nome=$("#cn").value.trim(), tel=telNum($("#ct").value), end=($("#ce")||{}).value?.trim()||"", obs=$("#co").value.trim(), uf=($("#cu")||{}).value||"";
-  const err=t=>{ $("#serr").textContent=t; };
-  if(!nome) return err("Informe seu nome.");
-  if(!telOk(tel)) return err("Informe seu WhatsApp com DDD.");
-  if(modo==="entregar"&&!uf) return err("Escolha o estado da entrega.");
-  if(modo==="entregar"&&!end) return err("Informe o endereço de entrega.");
+  const v=id=>(($("#"+id)||{}).value||"").trim();
+  const nome=v("cn"), tel=telNum(v("ct")), obs=v("co"), uf=v("cu"), cep=v("cc").replace(/\D/g,"");
+  const ender={cep,rua:v("cr"),num:v("cnum"),comp:v("ccp"),bairro:v("cb"),cidade:v("cci"),uf};
+  const end=modo==="entregar"?`${ender.rua}, ${ender.num}${ender.comp?` — ${ender.comp}`:""} — ${ender.bairro}, ${ender.cidade}/${uf} — CEP ${fmtCep(cep)}`:"";
+  const err=(t,foco)=>{ $("#serr").textContent=t; if(foco) $("#"+foco)?.focus(); };
+  if(!nome) return err("Informe seu nome.","cn");
+  if(!telOk(tel)) return err("Informe seu WhatsApp com DDD.","ct");
+  if(modo==="entregar"){
+    if(cep.length!==8) return err("Informe o CEP da entrega.","cc");
+    if(!ender.rua) return err("Informe a rua.","cr");
+    if(!ender.num) return err("Informe o número (ou S/N).","cnum");
+    if(!ender.bairro) return err("Informe o bairro.","cb");
+    if(!ender.cidade) return err("Informe a cidade.","cci");
+    if(!uf) return err("Escolha o estado.","cu");
+  }
   if(!LOJA.whats) return err("A loja ainda não configurou o WhatsApp. Tente mais tarde.");
   const b=$("#enviar"); b.disabled=true; b.textContent="Conferindo estoque…";
   try{ await carregar(); }catch(e){}
@@ -456,16 +497,16 @@ async function enviar(modo){
   if(ok.length!==L.length){ SACOLA=ok.map(l=>l.i); salvaSacola(); render(); abreSacola("Algumas peças esgotaram e saíram da sacola. Confira e envie de novo."); return; }
   if(ajustaSacola()){ render(); abreSacola("O estoque mudou e algumas quantidades foram ajustadas. Confira e envie de novo."); return; }
   L=linhas(); ok=L.filter(l=>l.ok);
-  CLI={nome,tel,end,modo,uf}; ls.set("colab_cliente",CLI);
+  CLI={nome,tel,modo,...(modo==="entregar"?ender:{uf:CLI.uf,cep:CLI.cep,rua:CLI.rua,num:CLI.num,comp:CLI.comp,bairro:CLI.bairro,cidade:CLI.cidade})}; ls.set("colab_cliente",CLI);
   const sub=ok.reduce((s,l)=>s+l.preco*l.i.qtd,0), fr=frete(modo,uf,sub), taxa=fr.taxa;
   const itens=ok.map(l=>({id:l.p.id,sku:l.t.sku,nome:l.p.nome,cor:l.p.cor,tam:l.i.tam,qtd:l.i.qtd,preco:l.preco}));
-  const dados={nome,tel,entrega:modo,endereco:modo==="entregar"?end:"",uf:modo==="entregar"?uf:"",freteGratis:fr.gratis,obs,itens,subtotal:+sub.toFixed(2),taxa,total:+(sub+taxa).toFixed(2)};
+  const dados={nome,tel,entrega:modo,endereco:end,uf:modo==="entregar"?uf:"",cep:modo==="entregar"?cep:"",freteGratis:fr.gratis,obs,itens,subtotal:+sub.toFixed(2),taxa,total:+(sub+taxa).toFixed(2)};
   let num=null;
   try{ const {data,error}=await sb.rpc("loja_pedido_criar",{p_dados:dados}); if(!error) num=data; }catch(e){}
   const msg=[`Olá! Quero fazer um pedido${num?` (#${num})`:""}:`,"",
     ...itens.map(i=>`• ${i.qtd}× ${i.nome} ${i.cor||""} — Tam. ${i.tam} — ${brl(i.preco*i.qtd)}`),"",
     `Peças: ${brl(sub)}`,
-    modo==="entregar"?`Entrega: ${fr.gratis?"FRETE GRÁTIS":taxa?brl(taxa):"a combinar"} — ${end} (${uf})`:"Retirar na loja",
+    modo==="entregar"?`Entrega: ${fr.gratis?"FRETE GRÁTIS":taxa?brl(taxa):"a combinar"}\n${end}`:"Retirar na loja",
     `*Total: ${brl(sub+taxa)}*`,"",`Nome: ${nome}`,obs?`Obs.: ${obs}`:""].filter(x=>x!==null).join("\n").replace(/\n{3,}/g,"\n\n").trim();
   const url=`https://wa.me/55${LOJA.whats}?text=${encodeURIComponent(msg)}`;
   SACOLA=[]; salvaSacola();
