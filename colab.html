@@ -2553,7 +2553,8 @@ async function excelClientes(lista){
    — nunca custo nem quantidade. O app publica a vitrine sozinho quando o estoque muda (funções do loja-supabase.sql).
    O pedido do site chega pelo WhatsApp e fica aqui; "Levar para Nova venda" faz a venda normal (baixa estoque, caixa, cashback). */
 let LOJA={mod:{},cfg:{}};
-const lojaCfg=()=>Object.assign({whats:"",insta:"",texto:"",entrega:true,taxa:0,entregaTxt:"",retirada:true,endereco:""},LOJA.cfg||{});
+const lojaCfg=()=>Object.assign({whats:"",insta:"",texto:"",entrega:true,taxa:0,entregaTxt:"",retirada:true,endereco:"",gratisMin:450,gratisReg:["Sul","Sudeste"]},LOJA.cfg||{});
+const REGIOES={Sul:["PR","SC","RS"],Sudeste:["SP","RJ","MG","ES"],"Centro-Oeste":["DF","GO","MT","MS"],Nordeste:["BA","SE","AL","PE","PB","RN","CE","PI","MA"],Norte:["AM","PA","AC","RO","RR","AP","TO"]};
 const modKey=p=>semAcento(`${p.nome}|${p.cor}`).replace(/\s+/g," ").trim();
 const ordItensTam=ps=>ps.slice().sort((a,b)=>ordTam(String(a.tam||""),String(b.tam||"")));
 function lojaModelos(){
@@ -2574,7 +2575,8 @@ function lojaDados(){
       if(p.qtd>0&&!t[k].ok) Object.assign(t[k],{ok:true,n:Math.min(LOJA_MAXQTD,p.qtd),sku:p.sku,preco:+p.preco||0}); });
     return {id:x.k,nome:x.nome,cor:x.cor,cat:x.cat,desc:x.desc,foto:x.foto,fotos:x.fotos,preco:x.preco,tams:Object.values(t)}; });
   return {loja:{whats:telNum(c.whats),insta:String(c.insta||"").replace(/^@/,""),texto:c.texto,entrega:!!c.entrega,taxa:+c.taxa||0,
-    entregaTxt:c.entregaTxt,retirada:!!c.retirada,endereco:c.endereco},prods};
+    entregaTxt:c.entregaTxt,retirada:!!c.retirada,endereco:c.endereco,
+    gratisMin:+c.gratisMin||0,gratisReg:c.gratisReg||[],gratisUF:(c.gratisReg||[]).flatMap(r=>REGIOES[r]||[])},prods};
 }
 let LOJA_PUB="", LOJA_ST={ok:null,msg:"",quando:""}, LOJA_TENT=0, LOJA_PED=null, LOJA_PED_ERR="", LOJA_PED_T=0;
 const lojaUrl=()=>location.origin+"/loja";
@@ -2714,7 +2716,7 @@ function lojaPedidosHTML(){
         <td><b>${esc(d.nome||"")}</b><div class="hint">${esc(telFmt(d.tel||""))}</div></td>
         <td style="font-size:12px">${(d.itens||[]).map(i=>`${i.qtd>1?i.qtd+"× ":""}${esc(i.nome)} ${esc(i.cor||"")} <b>${esc(i.tam||"")}</b>`).join("<br>")}${d.obs?`<div class="hint">Obs.: ${esc(d.obs)}</div>`:""}</td>
         <td class="num tnum"><b>${brl(+d.total||0)}</b>${d.taxa?`<div class="hint">entrega ${brl(+d.taxa)}</div>`:""}</td>
-        <td style="font-size:12px">${d.entrega==="entregar"?`Entregar<div class="hint">${esc(d.endereco||"")}</div>`:"Retirar na loja"}</td>
+        <td style="font-size:12px">${d.entrega==="entregar"?`Entregar${d.uf?` · ${esc(d.uf)}`:""}${d.freteGratis?` <span class="chip good">Frete grátis</span>`:""}<div class="hint">${esc(d.endereco||"")}</div>`:"Retirar na loja"}</td>
         <td><span class="chip ${s[1]}">${s[0]}</span></td>
         <td style="text-align:right;white-space:nowrap">
           <a class="btn ghost sm" href="https://wa.me/55${esc(telNum(d.tel||""))}?text=${encodeURIComponent(msg)}" target="_blank" rel="noopener">WhatsApp</a>
@@ -2809,6 +2811,14 @@ function modalLojaCfg(){
       <div class="field"><label>Taxa de entrega (R$)</label><input class="inp" id="lc_tax" inputmode="decimal" placeholder="0,00 = combinar" value="${c.taxa?String((+c.taxa).toFixed(2)).replace(".",","):""}"></div>
       <div class="field"><label>Onde entrega / aviso</label><input class="inp" id="lc_etx" placeholder="Ex.: Chapecó e região — outras cidades a combinar" value="${esc(c.entregaTxt)}"></div>
     </div>
+    <div class="infobox" style="gap:8px">
+      <b>Frete grátis</b>
+      <div class="g g2" style="align-items:end">
+        <div class="field"><label>Para compras a partir de (R$) — 0 desliga</label><input class="inp" id="lc_gmin" inputmode="decimal" value="${c.gratisMin?String((+c.gratisMin).toFixed(2)).replace(".",","):"0"}"></div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px 14px">${Object.keys(REGIOES).map(r=>`<label style="display:flex;gap:6px;align-items:center;font-size:13px;cursor:pointer"><input type="checkbox" data-reg="${r}" ${(c.gratisReg||[]).includes(r)?"checked":""} style="width:16px;height:16px">${r}</label>`).join("")}</div>
+      </div>
+      <div class="hint">Vale para entrega. O cliente informa o estado no site; o valor considera só as peças.</div>
+    </div>
     <div class="err" id="lc_err"></div>
     <div class="row"><button class="btn ghost" data-close>Cancelar</button><button class="btn" id="lc_ok">Salvar</button></div>`,"wide");
   $("#lc_ok").addEventListener("click",()=>{
@@ -2816,7 +2826,8 @@ function modalLojaCfg(){
     if(!telOk(wa)) return $("#lc_err").textContent="Informe o WhatsApp da loja com DDD.";
     if(!$("#lc_ret").checked&&!$("#lc_ent").checked) return $("#lc_err").textContent="Marque retirada, entrega ou os dois.";
     LOJA.cfg={whats:wa,insta:$("#lc_ig").value.trim().replace(/^@/,""),texto:$("#lc_tx").value.trim(),retirada:$("#lc_ret").checked,endereco:$("#lc_end").value.trim(),
-      entrega:$("#lc_ent").checked,taxa:+(parseNum($("#lc_tax").value)||0).toFixed(2),entregaTxt:$("#lc_etx").value.trim()};
+      entrega:$("#lc_ent").checked,taxa:+(parseNum($("#lc_tax").value)||0).toFixed(2),entregaTxt:$("#lc_etx").value.trim(),
+      gratisMin:+(parseNum($("#lc_gmin").value)||0).toFixed(2),gratisReg:[...$("#modalHost").querySelectorAll("[data-reg]:checked")].map(b=>b.dataset.reg)};
     closeModal(); viewLoja(); lojaPublicar(true); toast("Loja configurada.");
   });
 }
