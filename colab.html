@@ -624,7 +624,10 @@ function viewDash(){
   const pecasCat={}; const somaCat=(c,n)=>{if(n>0)pecasCat[c]=(pecasCat[c]||0)+n;};
   VM.forEach(v=>{ if(v.itens&&v.itens.length) v.itens.forEach(it=>somaCat(it.cat||"Outros",it.qtd));
     else { somaCat("Tênis",v.tenis||0); somaCat("Calças",(v.jogger||0)+(v.cargo||0)); somaCat("Camisetas",(v.over||0)+(v.long||0)+(v.trad||0)); } });
-  const isosDash=[...VENDAS.map(v=>v.dataISO),...Object.keys(HIST).map(ym=>ym+"-01"),hojeISO()].filter(Boolean);
+  // opções do seletor: os 12 meses do ano e todos os dias do mês escolhido (mesmo sem venda)
+  const mm=i=>String(i).padStart(2,"0");
+  const isosDash=[...VENDAS.map(v=>v.dataISO),...Object.keys(HIST).map(ym=>ym+"-01"),hojeISO(),
+    ...MESES.map((_,i)=>`${anoG}-${mm(i+1)}-01`),...(diario?diario.map((_,i)=>`${anoG}-${F.mes}-${mm(i+1)}`):[])].filter(Boolean);
   const marcaDe=sku=>{const p=ESTOQUE.find(x=>x.sku===sku); return (p&&String(p.marca||"").trim())||"Sem marca";};
   // valor por marca proporcional ao que foi pago (já com desconto/frete), para o total bater com o faturamento
   const porMarca={}; let semItens=0, semItensN=0;
@@ -642,8 +645,8 @@ function viewDash(){
     <div class="card" style="margin-bottom:14px"><div class="card-b" style="padding:10px 14px">
       <div class="datebar" style="align-items:flex-end">
         ${dfHTML("dsh",F,isosDash)}
-        <button class="btn ghost sm" id="dsh_hoje" type="button">Hoje</button>
-        <button class="btn ghost sm" id="dsh_mes" type="button">Este mês</button>
+        <button class="btn ghost sm" id="dshb_hoje" type="button">Hoje</button>
+        <button class="btn ghost sm" id="dshb_mes" type="button">Este mês</button>
         <span class="chip info" style="margin-left:auto">Mostrando: ${esc(nomeP)}</span>
       </div></div></div>
     <div class="tiles compact">
@@ -714,8 +717,8 @@ function viewDash(){
     </div>
   </div>`;
   dfBind("dsh",()=>DASHF,viewDash);
-  $("#dsh_hoje").addEventListener("click",()=>{DASHF={...dfHoje(),dia:hojeISO().slice(8,10)};viewDash();});
-  $("#dsh_mes").addEventListener("click",()=>{DASHF=dfHoje();viewDash();});
+  $("#dshb_hoje").addEventListener("click",()=>{DASHF={...dfHoje(),dia:hojeISO().slice(8,10)};viewDash();});
+  $("#dshb_mes").addEventListener("click",()=>{DASHF=dfHoje();viewDash();});
   $("#dashAno")?.addEventListener("change",e=>{DASH_ANO=e.target.value;viewDash();});
   $("#dDiaModo")?.addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;DASH_DIA=b.dataset.m;viewDash();});
 }
