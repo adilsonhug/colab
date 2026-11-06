@@ -2717,7 +2717,7 @@ function lojaProdutosHTML(mods){
   const q=LJF.q.trim();
   const lista=mods.filter(x=>(!q||busca([x.nome,x.cor,x.cat,...x.itens.map(p=>p.sku)],q))
     &&(LJF.f==="todos"||(LJF.f==="site"&&x.on)||(LJF.f==="fora"&&!x.on)||(LJF.f==="semfoto"&&!x.foto)||(LJF.f==="estoque"&&x.qtd>0)))
-    .sort((a,b)=>(b.on-a.on)||(b.qtd>0)-(a.qtd>0)||String(a.nome).localeCompare(String(b.nome),"pt-BR"));
+    .sort((a,b)=>(b.qtd>0)-(a.qtd>0)||String(a.nome).localeCompare(String(b.nome),"pt-BR")||String(a.cor).localeCompare(String(b.cor),"pt-BR")); // ordem fixa: marcar não muda a linha de lugar
   const mostra=lista.slice(0,150);
   $("#lj_corpo").innerHTML=`
     <div class="toolbar" style="flex-wrap:wrap;gap:10px">
