@@ -1505,16 +1505,19 @@ function viewDespesas(){
       </div>
     </div></div>
     <div class="card"><div class="card-b pad0"><div class="tw"><table>
-      <thead><tr><th>Data</th><th>Fornecedor</th><th>Descrição</th><th>Pagamento</th><th class="num">Valor</th></tr></thead>
-      <tbody>${lista.length?lista.map(d=>`<tr><td class="tnum" style="white-space:nowrap">${fmtDate(d.data)}</td><td>${esc(d.forn)}</td><td>${esc(d.desc)}</td>
-        <td><span class="pay"><span class="dot" style="background:${payIcon(d.pay)}"></span>${esc(d.pay)}</span></td><td class="num tnum">${brl(d.valor)}</td></tr>`).join("")
-        :`<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:24px">Nenhuma despesa nesse período.</td></tr>`}</tbody>
-      <tfoot><tr><td colspan="4" style="text-align:right;font-weight:700;color:var(--muted)">Total — ${esc(per)}</td><td class="num tnum" style="font-weight:800">${brl(tot)}</td></tr></tfoot>
+      <thead><tr><th>Data</th><th>Fornecedor</th><th>Descrição</th><th>Pagamento</th><th class="num">Valor</th><th></th></tr></thead>
+      <tbody>${lista.length?lista.map((d,i)=>`<tr><td class="tnum" style="white-space:nowrap">${fmtDate(d.data)}</td><td>${esc(d.forn)}</td><td>${esc(d.desc)}</td>
+        <td><span class="pay"><span class="dot" style="background:${payIcon(d.pay)}"></span>${esc(d.pay)}</span></td><td class="num tnum">${brl(d.valor)}</td>
+        <td style="text-align:right"><button class="btn ghost sm" data-de="${i}">Editar</button></td></tr>`).join("")
+        :`<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:24px">Nenhuma despesa nesse período.</td></tr>`}</tbody>
+      <tfoot><tr><td colspan="4" style="text-align:right;font-weight:700;color:var(--muted)">Total — ${esc(per)}</td><td class="num tnum" style="font-weight:800">${brl(tot)}</td><td></td></tr></tfoot>
     </table></div></div></div>
   </div>`;
   dfBind("ds",()=>DSF.d,viewDespesas);
   $("#ds_q").addEventListener("input",e=>{DSF.q=e.target.value;rerender(viewDespesas);});
   $("#addDesp").addEventListener("click",()=>modalDespesa());
+  $("#view").querySelectorAll("[data-de]").forEach(b=>b.addEventListener("click",()=>{ const d=lista[+b.dataset.de];
+    guardAdmin(()=>modalDespesa(d),"Editar ou excluir despesa exige a senha do administrador."); }));
 }
 
 function viewFech(){
@@ -2553,7 +2556,10 @@ async function excelClientes(lista){
    — nunca custo nem quantidade. O app publica a vitrine sozinho quando o estoque muda (funções do loja-supabase.sql).
    O pedido do site chega pelo WhatsApp e fica aqui; "Levar para Nova venda" faz a venda normal (baixa estoque, caixa, cashback). */
 let LOJA={mod:{},cfg:{}};
-const lojaCfg=()=>Object.assign({whats:"",insta:"",texto:"",entrega:true,taxa:0,entregaTxt:"",retirada:true,endereco:"",gratisMin:450,gratisReg:["Sul","Sudeste"]},LOJA.cfg||{});
+// frete: até "ate" = valor fixo; acima disso = % das peças; a partir de "gratis" = grátis. "a" vale para as regiões de regA, "b" para as demais
+const FRETE_PADRAO={regA:["Sul","Sudeste"],a:{ate:200,fixo:31.9,pct:13,gratis:450},b:{ate:200,fixo:39.9,pct:15,gratis:650}};
+const lojaCfg=()=>{ const c=Object.assign({whats:"",insta:"",texto:"",entrega:true,entregaTxt:"",retirada:true,endereco:""},LOJA.cfg||{});
+  c.frete=Object.assign({},FRETE_PADRAO,c.frete||{}); return c; };
 const REGIOES={Sul:["PR","SC","RS"],Sudeste:["SP","RJ","MG","ES"],"Centro-Oeste":["DF","GO","MT","MS"],Nordeste:["BA","SE","AL","PE","PB","RN","CE","PI","MA"],Norte:["AM","PA","AC","RO","RR","AP","TO"]};
 const modKey=p=>semAcento(`${p.nome}|${p.cor}`).replace(/\s+/g," ").trim();
 const ordItensTam=ps=>ps.slice().sort((a,b)=>ordTam(String(a.tam||""),String(b.tam||"")));
@@ -2571,12 +2577,12 @@ const LOJA_MAXFOTOS=6, LOJA_MAXQTD=10;
 function lojaDados(){
   const c=lojaCfg();
   const prods=lojaModelos().filter(x=>x.on).map(x=>{ const t={};
-    x.tams.forEach(p=>{ const k=String(p.tam); if(!t[k]) t[k]={t:k,ok:false,n:0,sku:p.sku,preco:+p.preco||0};
-      if(p.qtd>0&&!t[k].ok) Object.assign(t[k],{ok:true,n:Math.min(LOJA_MAXQTD,p.qtd),sku:p.sku,preco:+p.preco||0}); });
+    x.tams.forEach(p=>{ const k=String(p.tam); if(!t[k]) t[k]={t:k,ok:false,n:0,sku:p.sku,ean:p.ean||"",preco:+p.preco||0};
+      if(p.qtd>0&&!t[k].ok) Object.assign(t[k],{ok:true,n:Math.min(LOJA_MAXQTD,p.qtd),sku:p.sku,ean:p.ean||"",preco:+p.preco||0}); });
     return {id:x.k,nome:x.nome,cor:x.cor,cat:x.cat,desc:x.desc,foto:x.foto,fotos:x.fotos,preco:x.preco,tams:Object.values(t)}; });
   return {loja:{whats:telNum(c.whats),insta:String(c.insta||"").replace(/^@/,""),texto:c.texto,entrega:!!c.entrega,taxa:+c.taxa||0,
     entregaTxt:c.entregaTxt,retirada:!!c.retirada,endereco:c.endereco,
-    gratisMin:+c.gratisMin||0,gratisReg:c.gratisReg||[],gratisUF:(c.gratisReg||[]).flatMap(r=>REGIOES[r]||[])},prods};
+    frete:{...c.frete,ufA:c.frete.regA.flatMap(r=>REGIOES[r]||[])}},prods};
 }
 let LOJA_PUB="", LOJA_ST={ok:null,msg:"",quando:""}, LOJA_TENT=0, LOJA_PED=null, LOJA_PED_ERR="", LOJA_PED_T=0;
 const lojaUrl=()=>location.origin+"/loja";
@@ -2714,7 +2720,11 @@ function lojaPedidosHTML(){
         return `<tr>
         <td class="tnum"><b>#${p.id}</b><div class="hint">${quando(p.criado)}</div></td>
         <td><b>${esc(d.nome||"")}</b><div class="hint">${esc(telFmt(d.tel||""))}</div></td>
-        <td style="font-size:12px">${(d.itens||[]).map(i=>`${i.qtd>1?i.qtd+"× ":""}${esc(i.nome)} ${esc(i.cor||"")} <b>${esc(i.tam||"")}</b>`).join("<br>")}${d.obs?`<div class="hint">Obs.: ${esc(d.obs)}</div>`:""}</td>
+        <td style="font-size:12px;min-width:260px">${(d.itens||[]).map(i=>{ const prod=ESTOQUE.find(x=>x.sku===i.sku), ean=i.ean||(prod&&prod.ean)||"", foto=i.foto||(prod?fotosDe(LOJA.mod[modKey(prod)])[0]:"")||"";
+          return `<div style="display:flex;gap:8px;align-items:center;padding:3px 0">
+            <div style="width:44px;height:44px;flex:none;border-radius:6px;overflow:hidden;background:var(--surface-2);display:grid;place-items:center;font-size:9px;color:var(--muted)">${foto?`<img data-foto="${esc(foto)}" alt="" style="width:100%;height:100%;object-fit:cover">`:"sem foto"}</div>
+            <div style="min-width:0"><div>${i.qtd>1?`<b>${i.qtd}×</b> `:""}${esc(i.nome)} ${esc(i.cor||"")} · <b>${esc(i.tam||"")}</b></div>
+              <div class="hint">Ref. <b>${esc(i.sku||"—")}</b>${ean?` · Cód. ${esc(ean)}`:""}${prod?` · estoque ${prod.qtd||0}`:` · <span style="color:var(--crit)">fora do estoque</span>`}</div></div></div>`; }).join("")}${d.obs?`<div class="hint">Obs.: ${esc(d.obs)}</div>`:""}</td>
         <td class="num tnum"><b>${brl(+d.total||0)}</b>${d.taxa?`<div class="hint">entrega ${brl(+d.taxa)}</div>`:""}</td>
         <td style="font-size:12px">${d.entrega==="entregar"?`Entregar${d.uf?` · ${esc(d.uf)}`:""}${d.freteGratis?` <span class="chip good">Frete grátis</span>`:""}<div class="hint">${esc(d.endereco||"")}</div>`:"Retirar na loja"}</td>
         <td><span class="chip ${s[1]}">${s[0]}</span></td>
@@ -2734,6 +2744,8 @@ function lojaPedidosHTML(){
     if(s==="cancelado"&&!confirm(`Cancelar o pedido #${id}?`)) return;
     lojaPedidoStatus(id,s); }));
   $("#lj_corpo").querySelectorAll("[data-pvd]").forEach(b=>b.addEventListener("click",()=>lojaPedidoVenda((LOJA_PED||[]).find(p=>p.id===+b.dataset.pvd))));
+  const pinta=()=>$("#lj_corpo")?.querySelectorAll("img[data-foto]").forEach(i=>{ const f=FOTOS[i.dataset.foto]; if(f&&i.src!==f) i.src=f; });
+  pinta(); lojaFotos([...$("#lj_corpo").querySelectorAll("img[data-foto]")].map(i=>i.dataset.foto)).then(pinta);
 }
 function lojaPedidoVenda(p){
   if(!p) return;
@@ -2807,17 +2819,21 @@ function modalLojaCfg(){
     <label style="display:flex;gap:6px;align-items:center;font-size:13px;cursor:pointer"><input type="checkbox" id="lc_ret" ${c.retirada?"checked":""} style="width:16px;height:16px">Cliente pode retirar na loja</label>
     <div class="field"><label>Endereço para retirada</label><input class="inp" id="lc_end" placeholder="Rua, número — bairro" value="${esc(c.endereco)}"></div>
     <label style="display:flex;gap:6px;align-items:center;font-size:13px;cursor:pointer"><input type="checkbox" id="lc_ent" ${c.entrega?"checked":""} style="width:16px;height:16px">Faz entrega</label>
-    <div class="g g2">
-      <div class="field"><label>Taxa de entrega (R$)</label><input class="inp" id="lc_tax" inputmode="decimal" placeholder="0,00 = combinar" value="${c.taxa?String((+c.taxa).toFixed(2)).replace(".",","):""}"></div>
-      <div class="field"><label>Onde entrega / aviso</label><input class="inp" id="lc_etx" placeholder="Ex.: Chapecó e região — outras cidades a combinar" value="${esc(c.entregaTxt)}"></div>
-    </div>
-    <div class="infobox" style="gap:8px">
-      <b>Frete grátis</b>
-      <div class="g g2" style="align-items:end">
-        <div class="field"><label>Para compras a partir de (R$) — 0 desliga</label><input class="inp" id="lc_gmin" inputmode="decimal" value="${c.gratisMin?String((+c.gratisMin).toFixed(2)).replace(".",","):"0"}"></div>
-        <div style="display:flex;flex-wrap:wrap;gap:6px 14px">${Object.keys(REGIOES).map(r=>`<label style="display:flex;gap:6px;align-items:center;font-size:13px;cursor:pointer"><input type="checkbox" data-reg="${r}" ${(c.gratisReg||[]).includes(r)?"checked":""} style="width:16px;height:16px">${r}</label>`).join("")}</div>
-      </div>
-      <div class="hint">Vale para entrega. O cliente informa o estado no site; o valor considera só as peças.</div>
+    <div class="field"><label>Aviso sobre a entrega (opcional)</label><input class="inp" id="lc_etx" placeholder="Ex.: Enviamos em até 2 dias úteis" value="${esc(c.entregaTxt)}"></div>
+    <div class="infobox" style="gap:10px">
+      <b>Tabela de frete</b>
+      <div class="hint">Calculado pelo CEP do cliente, sobre o valor das peças. Até o valor do frete fixo cobra o fixo; acima, cobra a porcentagem; a partir do valor grátis, não cobra.</div>
+      ${(()=>{ const f=c.frete, n=v=>String((+v||0).toFixed(2)).replace(".",","), lin=(g,tit,regs)=>`
+        <div style="border:1px solid var(--border);border-radius:10px;padding:10px;display:flex;flex-direction:column;gap:8px;background:var(--surface)">
+          <b style="font-size:13px">${tit}</b>${regs||""}
+          <div class="g" style="grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px">
+            <div class="field"><label>Compras até (R$)</label><input class="inp" data-fr="${g}.ate" inputmode="decimal" value="${n(f[g].ate)}"></div>
+            <div class="field"><label>Frete fixo (R$)</label><input class="inp" data-fr="${g}.fixo" inputmode="decimal" value="${n(f[g].fixo)}"></div>
+            <div class="field"><label>Acima disso (% das peças)</label><input class="inp" data-fr="${g}.pct" inputmode="decimal" value="${String(f[g].pct).replace(".",",")}"></div>
+            <div class="field"><label>Grátis a partir de (R$)</label><input class="inp" data-fr="${g}.gratis" inputmode="decimal" value="${n(f[g].gratis)}"></div>
+          </div></div>`;
+        return lin("a","Regiões",`<div style="display:flex;flex-wrap:wrap;gap:6px 14px">${Object.keys(REGIOES).map(r=>`<label style="display:flex;gap:6px;align-items:center;font-size:13px;cursor:pointer"><input type="checkbox" data-reg="${r}" ${f.regA.includes(r)?"checked":""} style="width:16px;height:16px">${r}</label>`).join("")}</div>`)
+          +lin("b","Demais regiões"); })()}
     </div>
     <div class="err" id="lc_err"></div>
     <div class="row"><button class="btn ghost" data-close>Cancelar</button><button class="btn" id="lc_ok">Salvar</button></div>`,"wide");
@@ -2825,9 +2841,13 @@ function modalLojaCfg(){
     const wa=telNum($("#lc_wa").value);
     if(!telOk(wa)) return $("#lc_err").textContent="Informe o WhatsApp da loja com DDD.";
     if(!$("#lc_ret").checked&&!$("#lc_ent").checked) return $("#lc_err").textContent="Marque retirada, entrega ou os dois.";
+    const frete={regA:[...$("#modalHost").querySelectorAll("[data-reg]:checked")].map(b=>b.dataset.reg),a:{},b:{}};
+    for(const el of $("#modalHost").querySelectorAll("[data-fr]")){ const [g,k]=el.dataset.fr.split("."), v=parseNum(el.value);
+      if(!(v>=0)) return $("#lc_err").textContent="Confira os valores da tabela de frete.";
+      frete[g][k]=+v.toFixed(2); }
+    for(const g of ["a","b"]) if(frete[g].gratis&&frete[g].gratis<=frete[g].ate) return $("#lc_err").textContent="O valor do frete grátis tem que ser maior que o limite do frete fixo.";
     LOJA.cfg={whats:wa,insta:$("#lc_ig").value.trim().replace(/^@/,""),texto:$("#lc_tx").value.trim(),retirada:$("#lc_ret").checked,endereco:$("#lc_end").value.trim(),
-      entrega:$("#lc_ent").checked,taxa:+(parseNum($("#lc_tax").value)||0).toFixed(2),entregaTxt:$("#lc_etx").value.trim(),
-      gratisMin:+(parseNum($("#lc_gmin").value)||0).toFixed(2),gratisReg:[...$("#modalHost").querySelectorAll("[data-reg]:checked")].map(b=>b.dataset.reg)};
+      entrega:$("#lc_ent").checked,entregaTxt:$("#lc_etx").value.trim(),frete};
     closeModal(); viewLoja(); lojaPublicar(true); toast("Loja configurada.");
   });
 }
@@ -3487,26 +3507,41 @@ function invResumo(){
   });
 }
 
-function modalDespesa(){
-  modal(`<h3>Nova despesa</h3>
+// sem "ed": nova despesa; com "ed": edita (ou exclui) a despesa já lançada
+function modalDespesa(ed){
+  const PAYS=["Pix","Dinheiro do caixa","Dinheiro","Cartão crédito","Cartão débito","Link pagamento","Saída"];
+  const cxDe=ed&&ed.cx?CAIXAS.find(c=>c.id===ed.cx):null, cxFechado=!!(cxDe&&cxDe.fech);
+  modal(`<h3>${ed?"Editar despesa":"Nova despesa"}</h3>
     <div class="formrow">
-      <div class="field"><label>Data</label><input class="inp" id="d_data" type="date" value="${hojeISO()}"></div>
-      <div class="field"><label>Fornecedor</label><input class="inp" id="d_forn" placeholder="Ex.: Correios"></div>
+      <div class="field"><label>Data</label><input class="inp" id="d_data" type="date" value="${esc(ed?ed.data:hojeISO())}"></div>
+      <div class="field"><label>Fornecedor</label><input class="inp" id="d_forn" placeholder="Ex.: Correios" value="${esc(ed?ed.forn:"")}"></div>
     </div>
-    <div class="field"><label>Descrição</label><input class="inp" id="d_desc" placeholder="Ex.: Envio de pedidos"></div>
+    <div class="field"><label>Descrição</label><input class="inp" id="d_desc" placeholder="Ex.: Envio de pedidos" value="${esc(ed&&ed.desc!=="—"?ed.desc:"")}"></div>
     <div class="formrow">
-      <div class="field"><label>Pagamento</label><select class="inp" id="d_pay"><option>Pix</option><option>Dinheiro do caixa</option><option>Dinheiro</option><option>Cartão crédito</option><option>Cartão débito</option><option>Link pagamento</option><option>Saída</option></select></div>
-      <div class="field"><label>Valor (R$)</label><input class="inp" id="d_val" type="number" step="0.01" placeholder="0,00"></div>
+      <div class="field"><label>Pagamento</label><select class="inp" id="d_pay">${[...new Set([...PAYS,...(ed&&ed.pay?[ed.pay]:[])])].map(p=>`<option ${ed&&ed.pay===p?"selected":""}>${esc(p)}</option>`).join("")}</select></div>
+      <div class="field"><label>Valor (R$)</label><input class="inp" id="d_val" type="number" step="0.01" placeholder="0,00" value="${ed?ed.valor:""}"></div>
     </div>
     <div class="hint" id="d_cxhint" hidden>Sai da gaveta do caixa aberto e entra no fechamento do dia. "Dinheiro" (sem caixa) é dinheiro de fora da gaveta.</div>
-    <div class="row"><button class="btn ghost" data-close>Cancelar</button><button class="btn" id="d_save">Lançar despesa</button></div>`);
+    ${cxFechado?`<div class="hint" style="color:var(--warn)">Esta despesa saiu do caixa de ${fmtDate(cxDe.data)}, que já foi fechado. O fechamento impresso não muda.</div>`:""}
+    <div class="row">${ed?`<button class="btn ghost" id="d_del" style="color:var(--crit);margin-right:auto">Excluir</button>`:""}<button class="btn ghost" data-close>Cancelar</button><button class="btn" id="d_save">${ed?"Salvar alterações":"Lançar despesa"}</button></div>`);
   const cxPay=()=>$("#d_pay").value==="Dinheiro do caixa";
-  const dica=()=>{ $("#d_cxhint").hidden=!cxPay(); if(cxPay()) $("#d_data").value=hojeISO(); $("#d_data").disabled=cxPay(); };
-  $("#d_pay").addEventListener("change",dica);
+  const dica=()=>{ $("#d_cxhint").hidden=!cxPay(); if(cxPay()&&!(ed&&ed.cx)) $("#d_data").value=hojeISO(); $("#d_data").disabled=cxPay(); };
+  $("#d_pay").addEventListener("change",dica); if(ed) dica();
+  $("#d_del")?.addEventListener("click",()=>{
+    if(!confirm(`Excluir a despesa "${ed.forn}" de ${brl(ed.valor)} (${fmtDate(ed.data)})? Não dá para desfazer.`)) return;
+    DESPESAS=DESPESAS.filter(x=>x!==ed); closeModal(); viewDespesas(); toast("Despesa excluída."); });
   $("#d_save").addEventListener("click",()=>{
     const forn=$("#d_forn").value.trim(), val=parseFloat($("#d_val").value);
     if(!forn||isNaN(val)||val<=0){toast("Preencha fornecedor e valor.");return;}
-    const d={id:DESPESAS.reduce((m,x)=>Math.max(m,+x.id||0),0)+1,data:$("#d_data").value,forn,desc:$("#d_desc").value.trim()||"—",pay:$("#d_pay").value,valor:+val.toFixed(2)};
+    const d={id:ed?ed.id:DESPESAS.reduce((m,x)=>Math.max(m,+x.id||0),0)+1,data:$("#d_data").value,forn,desc:$("#d_desc").value.trim()||"—",pay:$("#d_pay").value,valor:+val.toFixed(2)};
+    if(ed){
+      // continua no mesmo caixa se segue "Dinheiro do caixa"; trocou o pagamento, sai do caixa
+      if(cxPay()&&ed.cx) Object.assign(d,{data:ed.data,cx:ed.cx,hora:ed.hora,user:ed.user});
+      else if(cxPay()){ const c=caixaAberto(); if(!c) return toast("Abra o caixa para lançar como dinheiro do caixa.");
+        Object.assign(d,{data:hojeISO(),cx:c.id,hora:horaAgora(),user:SESSION.name}); }
+      const k=DESPESAS.indexOf(ed); if(k>=0) DESPESAS[k]=d; else DESPESAS.unshift(d);
+      closeModal(); viewDespesas(); toast("Despesa alterada."); return;
+    }
     if(cxPay()){
       const c=caixaAberto();
       if(!c){ const dados={forn,desc:$("#d_desc").value,val:$("#d_val").value};
