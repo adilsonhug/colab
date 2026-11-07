@@ -639,7 +639,7 @@ function viewDash(){
     its.forEach(it=>{const m=marcaDe(it.sku), o=porMarca[m]||(porMarca[m]={pecas:0,valor:0}); o.pecas+=it.qtd; o.valor+=it.qtd*it.preco*fator;}); });
   const marcas=Object.entries(porMarca).sort((a,b)=>(a[0]==="Sem marca")-(b[0]==="Sem marca")||b[1].valor-a[1].valor);
   const totMarcas=marcas.reduce((s,[,o])=>s+o.valor,0)+semItens;
-  const porPag={}; VM.forEach(v=>{const k=v.pay||"Não informado", o=porPag[k]||(porPag[k]={valor:0,n:0}); o.valor+=v.valor; o.n++;});
+  const porPag={}; VM.forEach(v=>pagsDe(v).forEach(x=>{const k=x.pay||"Não informado", o=porPag[k]||(porPag[k]={valor:0,n:0}); o.valor+=x.valor; o.n++;}));
   const pags=Object.entries(porPag).sort((a,b)=>(a[0]==="Não informado")-(b[0]==="Não informado")||b[1].valor-a[1].valor);
   const totPag=pags.reduce((s,[,o])=>s+o.valor,0);
   $("#view").innerHTML=`
@@ -744,12 +744,16 @@ const novoVF=()=>({vend:"",tipo:"",pay:"",cat:"",q:"",d:novoDF()});
 let VF=novoVF();
 const PAGAMENTOS=["Pix","Dinheiro","Cartão crédito","Cartão débito","Desconto em folha"];
 const PAG_FOLHA="Desconto em folha"; // venda para funcionário: descontada do salário, sempre com senha do administrador
+// pagamento dividido: v.pay = "Dividido" e v.pags = [{pay,valor}]; os totais por forma somam cada parte
+const PAG_DIV="Dividido";
+const pagsDe=v=>Array.isArray(v.pags)&&v.pags.length?v.pags:[{pay:v.pay,valor:v.valor}];
+const payTxt=v=>Array.isArray(v.pags)&&v.pags.length?v.pags.map(x=>`${x.pay} ${brl(x.valor)}`).join(" + "):v.pay;
 function viewVendas(){
   const vendedores=[...new Set([...USERS.map(u=>u.name),...VENDAS.map(v=>v.vend)])];
-  const pays=[...new Set([...PAGAMENTOS,...VENDAS.map(v=>v.pay)])];
+  const pays=[...new Set([...PAGAMENTOS,...VENDAS.flatMap(v=>pagsDe(v).map(x=>x.pay))])];
   const cats=CATEGORIAS.filter(c=>VENDAS.some(v=>(v.cats||[]).includes(c)));
   const q=VF.q.trim();
-  const lista=VENDAS.filter(v=>dfMatch(v.dataISO,VF.d)&&(!q||busca(v.desc,q))&&(!VF.vend||v.vend===VF.vend)&&(!VF.tipo||v.tipo===VF.tipo)&&(!VF.pay||v.pay===VF.pay)&&(!VF.cat||(v.cats||[]).includes(VF.cat)))
+  const lista=VENDAS.filter(v=>dfMatch(v.dataISO,VF.d)&&(!q||busca(v.desc,q))&&(!VF.vend||v.vend===VF.vend)&&(!VF.tipo||v.tipo===VF.tipo)&&(!VF.pay||pagsDe(v).some(x=>x.pay===VF.pay))&&(!VF.cat||(v.cats||[]).includes(VF.cat)))
     .sort((a,b)=>b.dataISO.localeCompare(a.dataISO)||(b.hora||"").localeCompare(a.hora||"")||b.id-a.id);
   const totFil=lista.reduce((s,v)=>s+v.valor,0);
   const ativo=VF.vend||VF.tipo||VF.pay||VF.cat||VF.q||dfAtivo(VF.d);
@@ -767,7 +771,7 @@ function viewVendas(){
         <td><span class="chip crit">Devolução</span></td>
         <td class="num tnum" style="color:var(--muted);text-decoration:line-through">${brl(d.valor)}</td></tr>`;
   const sel=(id,lbl,opts,val)=>`<div class="field" style="min-width:140px;flex:1"><label>${lbl}</label>${optSel(id,opts,val)}</div>`;
-  const porPay=pays.map(p=>[p,lista.filter(v=>v.pay===p).reduce((s,v)=>s+v.valor,0)]).filter(x=>x[1]>0);
+  const porPay=pays.map(p=>[p,lista.reduce((s,v)=>s+pagsDe(v).filter(x=>x.pay===p).reduce((t,x)=>t+x.valor,0),0)]).filter(x=>x[1]>0);
   $("#view").innerHTML=`
   <div class="section">
     <div class="card" style="margin-bottom:14px"><div class="card-b" style="display:flex;flex-direction:column;gap:12px">
@@ -797,7 +801,7 @@ function viewVendas(){
         <td style="min-width:220px">${jaDev?`<div class="hint" style="color:var(--crit);font-weight:700">↩ ${jaDev} peça(s) já devolvida(s)</div>`:""}${v.imp?`<span style="color:var(--muted);font-style:italic">${esc(v.desc)}</span> <span class="badge">importado</span>`:esc(v.desc)}${v.nova?`<div class="hint">baixou ${v.itens.reduce((s,i)=>s+i.qtd,0)} peça(s) do estoque</div>`:""}${v.vale?`<div class="hint" style="color:#0e8a8a">troca: ${brl(v.vale.valor)} em vale ${esc(v.vale.cod)} · compra de ${brl(v.valor+v.vale.valor)} · entrou ${brl(v.valor)}</div>`:""}${v.cli||v.cbUsado?`<div class="hint" style="color:#b8860b">${v.cli?`cliente: ${esc(v.cli.nome||"")} ${esc(telFmt(v.cli.tel))}`:""}${v.cbUsado?` · usou ${brl(v.cbUsado)} de cashback`:""}${v.cbGanho?` · ganhou ${brl(v.cbGanho)}`:""}</div>`:""}</td>
         <td><div style="display:flex;gap:4px;flex-wrap:wrap">${(v.cats||[]).map(c=>`<span class="badge" style="${c===VF.cat?"background:var(--accent-soft);color:var(--accent)":""}">${esc(c)}</span>`).join("")}</div></td>
         <td>${esc(v.vend)}</td>
-        <td><span class="pay"><span class="dot" style="background:${payIcon(v.pay)}"></span>${esc(v.pay)}</span></td>
+        <td>${pagsDe(v).map(x=>`<span class="pay" style="display:flex"><span class="dot" style="background:${payIcon(x.pay)}"></span>${esc(x.pay)}${v.pags?` <span class="tnum" style="font-weight:500;color:var(--muted)">${brl(x.valor)}</span>`:""}</span>`).join("")}</td>
         <td><span class="badge ${v.tipo==='Online'?'onl':v.tipo==='Loja física'?'fis':''}">${esc(v.tipo)}</span></td>
         <td class="num tnum">${brl(v.valor)}</td></tr>`; }).join("")
         :`<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:24px">${VF.pay==="Devolução"?"Nenhuma devolução com esses filtros.":"Nenhuma venda com esses filtros."}</td></tr>`}</tbody>
@@ -1791,7 +1795,7 @@ function viewPDV(){
       <b style="color:var(--warn)">Caixa fechado</b><span>Abra o caixa (troco inicial) antes da primeira venda de hoje.</span>
       <button class="btn sm" id="v_abrecx" style="margin-left:auto">Abrir caixa</button></div>`}
     ${PDV.ultima?`<div class="infobox" style="margin-bottom:14px;background:var(--good-soft);border-color:transparent;flex-direction:row;align-items:center;gap:10px;flex-wrap:wrap">
-      <b style="color:var(--good)">✓ Venda registrada</b><span>${brl(PDV.ultima.valor)} · ${esc(PDV.ultima.pay)} · ${esc(PDV.ultima.vend)} · ${fmtDate(PDV.ultima.dataISO)}</span>
+      <b style="color:var(--good)">✓ Venda registrada</b><span>${brl(PDV.ultima.valor)} · ${esc(payTxt(PDV.ultima))} ·${esc(PDV.ultima.vend)} · ${fmtDate(PDV.ultima.dataISO)}</span>
       <button class="btn ghost sm" id="v_ver" style="margin-left:auto">Ver em Vendas</button></div>`:""}
     <div class="grid2" style="margin-top:0;align-items:start">
       <div class="card"><div class="card-h"><h3>Produtos</h3><span class="hint">${cart.reduce((s,i)=>s+i.qtd,0)} peça(s)</span></div><div class="card-b" style="display:flex;flex-direction:column;gap:12px">
@@ -1809,6 +1813,7 @@ function viewPDV(){
           <div class="field"><label>Nome do cliente</label><input class="inp" id="v_cli" placeholder="Opcional" value="${esc(PDV.pref&&PDV.pref.nome||"")}"></div>
         </div>
         <div id="v_cliinfo" style="display:flex;flex-direction:column;gap:6px;font-size:12.5px"></div>
+        <div class="formrow">
           <div class="field"><label>Data da venda</label><input class="inp" id="v_data" type="date" value="${hojeISO()}"></div>
           <div class="field"><label>Vendedor <span class="req">*</span></label><select class="inp" id="v_vend"><option value="" selected>Selecione…</option>${(isAdmin?vendedores:vendedores.filter(u=>u.id===SESSION.id)).map(u=>`<option>${esc(u.name)}</option>`).join("")}</select></div>
         </div>
@@ -1816,6 +1821,8 @@ function viewPDV(){
           <div class="field"><label>Pagamento</label><select class="inp" id="v_pay">${PAGAMENTOS.map(p=>`<option>${p}</option>`).join("")}</select></div>
           <div class="field"><label>Tipo <span class="req">*</span></label><select class="inp" id="v_tipo"><option value="" ${PDV.pref&&PDV.pref.pedido?"":"selected"}>Selecione…</option><option>Loja física</option><option ${PDV.pref&&PDV.pref.pedido?"selected":""}>Online</option></select></div>
         </div>
+        <button type="button" id="v_splitbtn" class="desc-link" style="align-self:flex-start;margin-top:-6px">+ pagar com mais de uma forma</button>
+        <div id="v_split" class="infobox" hidden style="gap:8px"></div>
         <div style="display:flex;gap:10px;align-items:flex-end">
           <div class="field" style="flex:1"><label>Frete (R$)</label><input class="inp" id="v_frete" inputmode="decimal" placeholder="0,00" value="${PDV.pref&&PDV.pref.frete?String(PDV.pref.frete.toFixed(2)).replace(".",","):""}"></div>
           <!-- desconto discreto: só um link pequeno; os campos abrem ao clicar -->
@@ -1859,6 +1866,36 @@ function viewPDV(){
   const cbUso=()=>usaCb?+Math.min(cbSaldoV(),cheio()-valeUso()).toFixed(2):0;
   const total=()=>+(cheio()-valeUso()-cbUso()).toFixed(2);
   const cbGanho=()=>{ if(!telOk(telV())||$("#v_pay").value===PAG_FOLHA) return 0; return +(Math.max(0,total()-frete())*CONFIG.cashPct/100).toFixed(2); };
+  // pagamento dividido: cada forma com seu valor; a última fica com o que falta
+  let split=null; // [{pay,valor}]
+  const PAGS_SPLIT=PAGAMENTOS.filter(p=>p!==PAG_FOLHA);
+  const splitResto=()=>split?+(total()-split.slice(0,-1).reduce((s,x)=>s+(x.valor||0),0)).toFixed(2):0;
+  const splitPags=()=>split?split.map((x,k)=>({pay:x.pay,valor:k===split.length-1?splitResto():+(x.valor||0).toFixed(2)})):null;
+  const restoSplit=()=>{ const el=$("#v_splrest"); if(!el) return; const r=splitResto();
+    el.textContent=brl(r); el.style.color=r>0?"":"var(--crit)";
+    $("#v_splaviso").textContent=r>0?"":"A soma das outras formas já passou do total da venda."; };
+  const drawSplit=()=>{
+    const box=$("#v_split"), btn=$("#v_splitbtn");
+    if(!split){ box.hidden=true; btn.hidden=false; $("#v_pay").disabled=false; return; }
+    box.hidden=false; btn.hidden=true; $("#v_pay").disabled=true;
+    const opts=v=>PAGS_SPLIT.map(p=>`<option ${p===v?"selected":""}>${esc(p)}</option>`).join("");
+    box.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:center"><b style="font-size:13px">Pagamento dividido</b><button type="button" class="desc-link" id="v_splno">cancelar divisão</button></div>
+      ${split.map((x,k)=>{ const ult=k===split.length-1;
+        return `<div style="display:grid;grid-template-columns:minmax(0,1fr) 120px 28px;gap:6px;align-items:center">
+          <select class="inp" data-sp="${k}">${opts(x.pay)}</select>
+          ${ult?`<div style="text-align:right;font-weight:800" class="tnum"><span class="hint" style="display:block;font-weight:500">o que falta</span><span id="v_splrest"></span></div>`
+            :`<input class="inp" data-sv="${k}" inputmode="decimal" placeholder="R$" value="${x.valor?x.valor.toFixed(2).replace(".",","):""}" style="text-align:right">`}
+          ${split.length>2?`<button type="button" class="icon-btn" style="width:28px;height:28px" data-sx="${k}" title="Tirar esta forma">×</button>`:"<span></span>"}</div>`; }).join("")}
+      ${split.length<4?`<button type="button" class="desc-link" id="v_spladd" style="align-self:flex-start">+ outra forma</button>`:""}
+      <div class="err" id="v_splaviso" style="min-height:0"></div>`;
+    box.querySelectorAll("[data-sp]").forEach(s=>s.addEventListener("change",()=>{ split[+s.dataset.sp].pay=s.value; }));
+    box.querySelectorAll("[data-sv]").forEach(i=>{ i.addEventListener("focus",()=>i.select());
+      i.addEventListener("input",()=>{ split[+i.dataset.sv].valor=parseNum(i.value)||0; restoSplit(); }); });
+    box.querySelectorAll("[data-sx]").forEach(b=>b.addEventListener("click",()=>{ split.splice(+b.dataset.sx,1); drawSplit(); }));
+    $("#v_spladd")?.addEventListener("click",()=>{ split.splice(split.length-1,0,{pay:PAGS_SPLIT.find(p=>!split.some(x=>x.pay===p))||"Pix",valor:0}); drawSplit(); });
+    $("#v_splno").addEventListener("click",()=>{ split=null; drawSplit(); });
+    restoSplit();
+  };
   const drawCli=()=>{
     const box=$("#v_cliinfo"), t=telV(); if(!box) return;
     if(!t){ usaCb=false; box.innerHTML=""; return; }
@@ -1911,6 +1948,7 @@ function viewPDV(){
     $("#v_totlbl").textContent=valeSel()||cu?"A pagar":"Total da venda";
     $("#v_total").textContent=brl(total());
     document.querySelector(".card-h .hint").textContent=`${cart.reduce((s,i)=>s+i.qtd,0)} peça(s)`;
+    restoSplit();
   };
   const poe=p=>{
     $("#v_code").value=""; fechaSug();
@@ -1968,6 +2006,8 @@ function viewPDV(){
   $("#v_tel").addEventListener("input",()=>{ drawCli(); const c=cliV(); if(c&&c.nome&&!$("#v_cli").value.trim()) $("#v_cli").value=c.nome; draw(); });
   $("#v_tel").addEventListener("blur",()=>{ const t=telV(); if(telOk(t)) $("#v_tel").value=telFmt(t); });
   $("#v_pay").addEventListener("change",draw);
+  $("#v_splitbtn").addEventListener("click",()=>{ const p=$("#v_pay").value===PAG_FOLHA?"Pix":$("#v_pay").value;
+    split=[{pay:p,valor:0},{pay:PAGS_SPLIT.find(x=>x!==p)||"Dinheiro",valor:0}]; drawSplit(); $("#v_split [data-sv]")?.focus(); });
   drawCli();
   $("#v_abrecx")?.addEventListener("click",()=>modalAbrirCaixa(()=>$("#v_cxbar")?.remove()));
   $("#v_clear").addEventListener("click",()=>{PDV.cart=[];PDV.ultima=null;viewPDV();});
@@ -2001,8 +2041,13 @@ function viewPDV(){
     const vs=valeSel(), vu=valeUso(), cu=cbUso();
     const telC=telV(); if(telC&&!telOk(telC)){ $("#v_tel").focus(); return msg("Telefone do cliente incompleto: use DDD + número (ou deixe em branco)."); }
     // pago todo com vale / cashback: a forma de pagamento vira "Vale-troca" ou "Cashback"
-    const pay=valor===0&&(vs||cu)?(vs&&vu?"Vale-troca":"Cashback"):$("#v_pay").value, vend=$("#v_vend").value, pecas=cart.reduce((s,i)=>s+i.qtd,0), dsc=desc();
-    fin={pay,vale:vs&&vu?{id:vs.id,cod:vs.cod,valor:vu}:null,cb:cu,ganho:pay===PAG_FOLHA?0:cbGanho(),
+    // dividido: todas as formas com valor e a soma igual ao total
+    const pags=valor>0?splitPags():null;
+    if(pags){ const ruim=pags.findIndex(x=>!(x.valor>0));
+      if(ruim>=0){ restoSplit(); return msg(ruim===pags.length-1?"Na divisão, as outras formas já somam o total. Diminua algum valor ou tire uma forma.":"Informe o valor de cada forma de pagamento."); } }
+    const pay=valor===0&&(vs||cu)?(vs&&vu?"Vale-troca":"Cashback"):pags?PAG_DIV:$("#v_pay").value, vend=$("#v_vend").value, pecas=cart.reduce((s,i)=>s+i.qtd,0), dsc=desc();
+    const pix=pags?+pags.filter(x=>x.pay==="Pix").reduce((s,x)=>s+x.valor,0).toFixed(2):pay==="Pix"?valor:0;
+    fin={pay,...(pags?{pags}:{}),vale:vs&&vu?{id:vs.id,cod:vs.cod,valor:vu}:null,cb:cu,ganho:pay===PAG_FOLHA?0:cbGanho(),
       cli:telOk(telC)?{tel:telC,nome:$("#v_cli").value.trim(),promo:!!$("#v_promo")?.checked}:null};
     // confirmação final antes de registrar (resumo da venda)
     modal(`<h3>Confirmar venda?</h3>
@@ -2010,7 +2055,8 @@ function viewPDV(){
         <tbody>${cart.map(i=>`<tr><td><b>${esc(i.p.nome)}</b><div class="hint">${esc(corCurta(i.p))} · Tam. ${esc(i.p.tam||"—")}</div></td>
           <td class="num tnum" style="white-space:nowrap">${i.qtd} × ${brl(i.preco)}</td><td class="num tnum" style="white-space:nowrap"><b>${brl(i.qtd*i.preco)}</b></td></tr>`).join("")}</tbody></table></div>
       <div class="infobox" style="gap:4px">
-        <div style="display:flex;justify-content:space-between"><span style="color:var(--muted)">Pagamento</span><b>${esc(pay)}</b></div>
+        ${pags?pags.map((x,k)=>`<div style="display:flex;justify-content:space-between"><span style="color:var(--muted)">${k?"":"Pagamento dividido"}</span><b><span class="dot" style="background:${payIcon(x.pay)};display:inline-block;margin-right:5px"></span>${esc(x.pay)} · <span class="tnum">${brl(x.valor)}</span></b></div>`).join("")
+          :`<div style="display:flex;justify-content:space-between"><span style="color:var(--muted)">Pagamento</span><b>${esc(pay)}</b></div>`}
         <div style="display:flex;justify-content:space-between"><span style="color:var(--muted)">Vendedor</span><b>${esc(vend)}</b></div>
         ${dsc||fr?`<div style="display:flex;justify-content:space-between"><span style="color:var(--muted)">Ajustes</span><b class="tnum">${dsc?"−"+brl(dsc):""}${dsc&&fr?" / ":""}${fr?"+"+brl(fr):""}</b></div>`:""}
         ${fin.vale?`<div style="display:flex;justify-content:space-between"><span style="color:#0e8a8a">Vale-troca ${esc(fin.vale.cod)} (${esc(vs.cliente)})</span><b class="tnum" style="color:#0e8a8a">−${brl(fin.vale.valor)}</b></div>`:""}
@@ -2021,7 +2067,7 @@ function viewPDV(){
       ${fin.ganho?`<div class="hint" style="color:#b8860b;font-weight:700">O cliente ganha ${brl(fin.ganho)} de cashback para usar até ${fmtDate(somaDiasISO(hojeISO(),CONFIG.cashDias))}.</div>`:""}
       ${pay===PAG_FOLHA?`<div class="field"><label>Funcionário (desconto em folha) <span class="req">*</span></label><select class="inp" id="cf_func"><option value="">Selecione…</option>${USERS.filter(u=>u.ativo!==false).map(u=>`<option ${PDV.pref&&PDV.pref.func===u.name?"selected":""}>${esc(u.name)}</option>`).join("")}</select></div>`:""}
       <div class="err" id="cf_err" style="min-height:0"></div>
-      <div class="row"><button class="btn ghost" data-close>Voltar</button><button class="btn" id="cf_ok">${pay==="Pix"?"Confirmar e gerar Pix":pay===PAG_FOLHA?"🔒 Confirmar (senha do administrador)":"Confirmar venda"}</button></div>`,"wide");
+      <div class="row"><button class="btn ghost" data-close>Voltar</button><button class="btn" id="cf_ok">${pix>0?`Confirmar e gerar Pix${pags?` de ${brl(pix)}`:""}`:pay===PAG_FOLHA?"🔒 Confirmar (senha do administrador)":"Confirmar venda"}</button></div>`,"wide");
     setTimeout(()=>$("#cf_ok")?.focus(),30);
     $("#cf_ok").addEventListener("click",()=>{
       // venda para funcionário: escolhe quem e sempre pede a senha do administrador
@@ -2031,9 +2077,9 @@ function viewPDV(){
       }
       closeModal();
       // Pix: mostra o QR Code com o valor; a venda só é registrada depois de confirmar que o Pix caiu
-      if(pay==="Pix"&&valor>0){
+      if(pix>0){
         const txid="COLAB"+Date.now().toString(36).toUpperCase();
-        return modalPix(valor,txid,()=>registrarVenda(dataISO,valor,tipo,fr));
+        return modalPix(pix,txid,()=>registrarVenda(dataISO,valor,tipo,fr));
       }
       registrarVenda(dataISO,valor,tipo,fr);
     });
@@ -2044,7 +2090,7 @@ function viewPDV(){
     const hora=dataISO===hojeISO()?new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}):"";
     const cx=dataISO===hojeISO()?caixaAberto():null;
     // valor = o que o cliente pagou; o vale usado fica guardado à parte (não entra de novo no faturamento)
-    const v={id:VENDAS.length+1,desc:descr,valor,desconto:desc(),vend:$("#v_vend").value,pay:fin.pay,tipo,nova:true,dataISO,hora,
+    const v={id:VENDAS.length+1,desc:descr,valor,desconto:desc(),vend:$("#v_vend").value,pay:fin.pay,...(fin.pags?{pags:fin.pags}:{}),tipo,nova:true,dataISO,hora,
       itens:cart.map(i=>({sku:i.p.sku,qtd:i.qtd,preco:i.preco,cat:i.p.cat})),cats:[...new Set(cart.map(i=>i.p.cat))],...(func?{func}:{}),
       ...(fin.vale?{vale:fin.vale}:{}),...(cx?{cx:cx.id}:{}),
       ...(fin.cli?{cli:{tel:fin.cli.tel,nome:fin.cli.nome}}:{}),...(fin.cb?{cbUsado:fin.cb}:{}),...(fin.ganho?{cbGanho:fin.ganho}:{})};
@@ -2525,7 +2571,7 @@ function modalCliente(tel){
     <label style="display:flex;gap:6px;align-items:center;font-size:13px;cursor:pointer"><input type="checkbox" id="cm_promo" ${c&&c.promo?"checked":""} style="width:16px;height:16px">Aceita receber promoções (WhatsApp)</label>
     ${c?`<div class="tw" style="border:1px solid var(--border);border-radius:10px;max-height:30vh;overflow:auto"><table style="min-width:0">
       <thead><tr><th>Data</th><th>Compra</th><th class="num">Pago</th><th class="num">Cashback</th></tr></thead>
-      <tbody>${comp.length?comp.map(v=>`<tr><td class="tnum">${fmtDate(v.dataISO)}</td><td style="font-size:12px">${esc(v.desc)}<div class="hint">${esc(v.pay)} · ${esc(v.vend)}</div></td>
+      <tbody>${comp.length?comp.map(v=>`<tr><td class="tnum">${fmtDate(v.dataISO)}</td><td style="font-size:12px">${esc(v.desc)}<div class="hint">${esc(payTxt(v))} · ${esc(v.vend)}</div></td>
         <td class="num tnum">${brl(v.valor)}</td><td class="num tnum" style="font-size:12px">${v.cbGanho?`<span style="color:var(--good)">+${brl(v.cbGanho)}</span>`:""}${v.cbUsado?`<div style="color:#b8860b">−${brl(v.cbUsado)}</div>`:""}</td></tr>`).join("")
         :`<tr><td colspan="4" style="text-align:center;color:var(--muted)">Sem compras registradas.</td></tr>`}</tbody></table></div>
       ${devs.length?`<div class="hint">${devs.length} devolução(ões): ${devs.map(d=>`${fmtDate(d.data)} ${brl(d.valor)}`).join(" · ")}</div>`:""}
@@ -2880,7 +2926,7 @@ let CAIXAS=[];
 const caixaAberto=()=>CAIXAS.find(c=>!c.fech)||null;
 function caixaResumo(c){
   const vendas=VENDAS.filter(v=>v.cx===c.id), devs=DEVOLUCOES.filter(d=>d.cx===c.id);
-  const porPay={}; vendas.forEach(v=>{ if(v.valor) porPay[v.pay]=+((porPay[v.pay]||0)+v.valor).toFixed(2); });
+  const porPay={}; vendas.forEach(v=>pagsDe(v).forEach(x=>{ if(x.valor) porPay[x.pay]=+((porPay[x.pay]||0)+x.valor).toFixed(2); }));
   const soma=t=>(c.movs||[]).filter(m=>m.tipo===t).reduce((s,m)=>s+m.valor,0);
   const sang=soma("sangria"), ref=soma("reforco");
   const devDin=devs.filter(d=>d.destino==="dinheiro").reduce((s,d)=>s+d.valor,0);
