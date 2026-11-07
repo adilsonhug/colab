@@ -1796,7 +1796,8 @@ function viewPDV(){
       <button class="btn sm" id="v_abrecx" style="margin-left:auto">Abrir caixa</button></div>`}
     ${PDV.ultima?`<div class="infobox" style="margin-bottom:14px;background:var(--good-soft);border-color:transparent;flex-direction:row;align-items:center;gap:10px;flex-wrap:wrap">
       <b style="color:var(--good)">✓ Venda registrada</b><span>${brl(PDV.ultima.valor)} · ${esc(payTxt(PDV.ultima))} ·${esc(PDV.ultima.vend)} · ${fmtDate(PDV.ultima.dataISO)}</span>
-      <button class="btn ghost sm" id="v_ver" style="margin-left:auto">Ver em Vendas</button></div>`:""}
+      ${PDV.ultima.cli?`<button class="btn ghost sm" id="v_wa" style="margin-left:auto">💬 Mensagem no WhatsApp</button>`:""}
+      <button class="btn ghost sm" id="v_ver" style="${PDV.ultima.cli?"":"margin-left:auto"}">Ver em Vendas</button></div>`:""}
     <div class="grid2" style="margin-top:0;align-items:start">
       <div class="card"><div class="card-h"><h3>Produtos</h3><span class="hint">${cart.reduce((s,i)=>s+i.qtd,0)} peça(s)</span></div><div class="card-b" style="display:flex;flex-direction:column;gap:12px">
         <div class="scanbar">
@@ -2012,6 +2013,7 @@ function viewPDV(){
   $("#v_abrecx")?.addEventListener("click",()=>modalAbrirCaixa(()=>$("#v_cxbar")?.remove()));
   $("#v_clear").addEventListener("click",()=>{PDV.cart=[];PDV.ultima=null;viewPDV();});
   $("#v_ver")?.addEventListener("click",()=>{current="vendas";renderNav();route();});
+  $("#v_wa")?.addEventListener("click",()=>abrirAgradecimento(PDV.ultima));
   if(PDV.pref&&PDV.pref.pay) $("#v_pay").value=PDV.pref.pay; // veio do retorno de funcionário: já em desconto em folha
   draw(); setTimeout(()=>$("#v_code")?.focus(),50);
 
@@ -2046,7 +2048,6 @@ function viewPDV(){
     if(pags){ const ruim=pags.findIndex(x=>!(x.valor>0));
       if(ruim>=0){ restoSplit(); return msg(ruim===pags.length-1?"Na divisão, as outras formas já somam o total. Diminua algum valor ou tire uma forma.":"Informe o valor de cada forma de pagamento."); } }
     const pay=valor===0&&(vs||cu)?(vs&&vu?"Vale-troca":"Cashback"):pags?PAG_DIV:$("#v_pay").value, vend=$("#v_vend").value, pecas=cart.reduce((s,i)=>s+i.qtd,0), dsc=desc();
-    const pix=pags?+pags.filter(x=>x.pay==="Pix").reduce((s,x)=>s+x.valor,0).toFixed(2):pay==="Pix"?valor:0;
     fin={pay,...(pags?{pags}:{}),vale:vs&&vu?{id:vs.id,cod:vs.cod,valor:vu}:null,cb:cu,ganho:pay===PAG_FOLHA?0:cbGanho(),
       cli:telOk(telC)?{tel:telC,nome:$("#v_cli").value.trim(),promo:!!$("#v_promo")?.checked}:null};
     // confirmação final antes de registrar (resumo da venda)
@@ -2065,9 +2066,10 @@ function viewPDV(){
       </div>
       <div class="total-bar"><span>${fin.vale||fin.cb?"A pagar":"Total"} · ${pecas} peça(s)</span><b class="tnum">${brl(valor)}</b></div>
       ${fin.ganho?`<div class="hint" style="color:#b8860b;font-weight:700">O cliente ganha ${brl(fin.ganho)} de cashback para usar até ${fmtDate(somaDiasISO(hojeISO(),CONFIG.cashDias))}.</div>`:""}
+      ${fin.cli&&pay!==PAG_FOLHA?`<label style="display:flex;gap:8px;align-items:center;font-size:13px;font-weight:600;cursor:pointer"><input type="checkbox" id="cf_wa" checked style="width:17px;height:17px">💬 Enviar agradecimento${fin.ganho||cashSaldo(fin.cli.tel)?" e o cashback":""} pelo WhatsApp</label>`:""}
       ${pay===PAG_FOLHA?`<div class="field"><label>Funcionário (desconto em folha) <span class="req">*</span></label><select class="inp" id="cf_func"><option value="">Selecione…</option>${USERS.filter(u=>u.ativo!==false).map(u=>`<option ${PDV.pref&&PDV.pref.func===u.name?"selected":""}>${esc(u.name)}</option>`).join("")}</select></div>`:""}
       <div class="err" id="cf_err" style="min-height:0"></div>
-      <div class="row"><button class="btn ghost" data-close>Voltar</button><button class="btn" id="cf_ok">${pix>0?`Confirmar e gerar Pix${pags?` de ${brl(pix)}`:""}`:pay===PAG_FOLHA?"🔒 Confirmar (senha do administrador)":"Confirmar venda"}</button></div>`,"wide");
+      <div class="row"><button class="btn ghost" data-close>Voltar</button><button class="btn" id="cf_ok">${pay===PAG_FOLHA?"🔒 Confirmar (senha do administrador)":"Confirmar venda"}</button></div>`,"wide");
     setTimeout(()=>$("#cf_ok")?.focus(),30);
     $("#cf_ok").addEventListener("click",()=>{
       // venda para funcionário: escolhe quem e sempre pede a senha do administrador
@@ -2075,13 +2077,10 @@ function viewPDV(){
         const func=$("#cf_func").value; if(!func) return $("#cf_err").textContent="Escolha o funcionário que vai ter o desconto em folha.";
         return askAdminPw(()=>registrarVenda(dataISO,valor,tipo,fr,func),`Venda de ${brl(valor)} para ${esc(func)} com desconto em folha. Confirme com a senha do administrador.`);
       }
+      const wa=!!$("#cf_wa")?.checked;
       closeModal();
-      // Pix: mostra o QR Code com o valor; a venda só é registrada depois de confirmar que o Pix caiu
-      if(pix>0){
-        const txid="COLAB"+Date.now().toString(36).toUpperCase();
-        return modalPix(pix,txid,()=>registrarVenda(dataISO,valor,tipo,fr));
-      }
       registrarVenda(dataISO,valor,tipo,fr);
+      if(wa&&PDV.ultima) abrirAgradecimento(PDV.ultima); // abre o WhatsApp com a mensagem pronta; é só tocar em enviar
     });
   });
   function registrarVenda(dataISO,valor,tipo,fr,func){
@@ -2475,6 +2474,33 @@ function salvaCliente(tel,nome,promo){
   else { if(nome&&nome!==c.nome) c.nome=nome; if(promo) c.promo=true; }
   return c;
 }
+// mensagem de agradecimento depois da venda (texto editável em Clientes; {cashback} vira a frase do saldo)
+const MSG_OBRIGADO_PADRAO="Olá, {nome}! 😊\nMuito obrigado pela sua compra na COLAB Clothing! 🖤\n{cashback}\nQualquer dúvida, é só chamar por aqui.";
+function msgAgradecimento(v){
+  const tel=v.cli.tel, saldo=cashSaldo(tel), venc=cashDisp(tel).map(x=>x.validade).sort()[0], ganho=v.cbGanho||0;
+  const cb=ganho?`💰 Você ganhou ${brl(ganho)} de cashback nesta compra.${saldo?` Seu saldo é ${brl(saldo)} para usar até ${fmtDate(venc)}.`:""}`
+    :saldo?`💰 Você tem ${brl(saldo)} de cashback para usar até ${fmtDate(venc)}.`:"";
+  const nome=String(v.cli.nome||"").trim().split(/\s+/)[0]||"";
+  let t=CONFIG.msgObrigado||MSG_OBRIGADO_PADRAO;
+  if(!cb) t=t.replace(/^[ \t]*\{cashback\}[ \t]*(\r?\n)?/m,""); // sem cashback: some a linha inteira
+  return t.replace(/\{nome\}/g,nome).replace(/\{valor\}/g,brl(v.valor)).replace(/\{cashback\}/g,cb)
+    .replace(/,\s*!/g,"!").replace(/\n{3,}/g,"\n\n").trim();
+}
+function abrirAgradecimento(v){
+  if(!v||!v.cli||!telOk(v.cli.tel)) return;
+  const url=`https://wa.me/55${v.cli.tel}?text=${encodeURIComponent(msgAgradecimento(v))}`;
+  const w=window.open(url,"_blank"); if(!w) toast("O navegador bloqueou a janela: use o botão 💬 Mensagem no WhatsApp.");
+}
+function modalMsgObrigado(){
+  guardAdmin(()=>{
+    modal(`<h3>Mensagem de agradecimento</h3>
+      <div class="hint">Vai pelo WhatsApp do cliente depois da venda (quando o telefone é informado). Use <b>{nome}</b> para o primeiro nome, <b>{valor}</b> para o valor da compra e <b>{cashback}</b> para a frase do cashback (ganho, saldo e validade — some se o cliente não tiver cashback).</div>
+      <div class="field"><textarea class="inp" id="mo_txt" rows="7" maxlength="800">${esc(CONFIG.msgObrigado||MSG_OBRIGADO_PADRAO)}</textarea></div>
+      <div class="row"><button class="btn ghost" id="mo_pad" style="margin-right:auto">Voltar ao padrão</button><button class="btn ghost" data-close>Cancelar</button><button class="btn" id="mo_ok">Salvar</button></div>`,"wide");
+    $("#mo_pad").addEventListener("click",()=>{ $("#mo_txt").value=MSG_OBRIGADO_PADRAO; });
+    $("#mo_ok").addEventListener("click",()=>{ const t=$("#mo_txt").value.trim(); CONFIG={...CONFIG,msgObrigado:t&&t!==MSG_OBRIGADO_PADRAO?t:""}; closeModal(); toast("Mensagem salva."); });
+  },"Alterar a mensagem de agradecimento exige a senha do administrador.");
+}
 // usa o cashback do mais antigo (que vence primeiro) para o mais novo
 function usaCashback(tel,valor){
   let r=valor;
@@ -2512,6 +2538,7 @@ function viewClientes(){
       <button class="btn ghost" id="cl_novo">+ Cliente</button>
       ${isAdmin?`<button class="btn ghost" id="cl_xls">Exportar Excel</button><button class="btn ghost" id="cl_copy">Copiar telefones</button>`:""}
       <button class="btn ghost" id="cl_cfg" title="Alterar exige a senha do administrador">🔒 Cashback: ${n0(CONFIG.cashPct)}% · ${CONFIG.cashDias} dias</button>
+      <button class="btn ghost" id="cl_msg" title="Texto enviado pelo WhatsApp depois da venda">💬 Mensagem pós-venda</button>
       ${CLSEL.size?`<button class="btn" id="cl_del" style="background:var(--crit)" title="Exige a senha do administrador">🔒 Excluir selecionados (${CLSEL.size})</button>`:""}
     </div>
     <div class="card"><div class="card-b pad0"><div class="tw"><table>
@@ -2538,6 +2565,7 @@ function viewClientes(){
   }));
   $("#cl_novo").addEventListener("click",()=>modalCliente(null));
   $("#cl_cfg").addEventListener("click",modalConfigCashback);
+  $("#cl_msg").addEventListener("click",modalMsgObrigado);
   $("#cl_xls")?.addEventListener("click",()=>excelClientes(lista));
   $("#cl_copy")?.addEventListener("click",async()=>{
     const tels=lista.filter(x=>x.c.promo).map(x=>"55"+x.c.tel);
