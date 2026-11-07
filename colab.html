@@ -760,7 +760,10 @@ function viewVendas(){
   // devoluções aparecem na lista, marcadas, mas não somam no total (o faturamento só conta o que o cliente pagou)
   const devs=VF.vend||VF.tipo||(VF.pay&&VF.pay!=="Devolução")?[]:DEVOLUCOES.filter(d=>dfMatch(d.data,VF.d)
     &&(!q||busca([d.cliente,d.motivo,d.cod,...d.itens.map(i=>i.nome)],q))&&(!VF.cat||d.itens.some(i=>i.cat===VF.cat)));
-  const linhas=[...lista.map(v=>({v,iso:v.dataISO,h:v.hora||"",id:v.id})),...devs.map(d=>({d,iso:d.data,h:d.hora||"",id:0}))]
+  // canceladas: aparecem riscadas e não somam (filtro de pagamento "Cancelada" mostra só elas)
+  const cancs=VF.vend||VF.tipo||(VF.pay&&VF.pay!=="Cancelada")?[]:CANCELADAS.filter(v=>dfMatch(v.dataISO,VF.d)&&(!q||busca([v.desc,v.cancelada.motivo],q))&&(!VF.cat||(v.cats||[]).includes(VF.cat)));
+  const linhas=[...(VF.pay==="Cancelada"?[]:lista).map(v=>({v,iso:v.dataISO,h:v.hora||"",id:v.id})),...(VF.pay==="Cancelada"?[]:devs).map(d=>({d,iso:d.data,h:d.hora||"",id:0})),
+    ...cancs.map(c=>({c,iso:c.dataISO,h:c.hora||"",id:c.id}))]
     .sort((a,b)=>b.iso.localeCompare(a.iso)||b.h.localeCompare(a.h)||b.id-a.id);
   const linhaDev=d=>`<tr style="background:var(--crit-soft)">
         <td class="tnum" style="white-space:nowrap">${fmtDate(d.data)}${d.hora?`<div class="hint">${d.hora}</div>`:""}</td>
@@ -770,6 +773,13 @@ function viewVendas(){
         <td>${d.destino==="vale"?`<span class="pay"><span class="dot" style="background:#0e8a8a"></span>Vale ${esc(d.cod)}</span>`:`<span class="pay"><span class="dot" style="background:var(--crit)"></span>Dinheiro devolvido</span>`}</td>
         <td><span class="chip crit">Devolução</span></td>
         <td class="num tnum" style="color:var(--muted);text-decoration:line-through">${brl(d.valor)}</td></tr>`;
+  const linhaCanc=c=>`<tr style="background:var(--surface-2);color:var(--muted)">
+        <td class="tnum" style="white-space:nowrap">${fmtDate(c.dataISO)}${c.hora?`<div class="hint">${c.hora}</div>`:""}</td>
+        <td style="min-width:220px"><b style="color:var(--crit)">✕ Cancelada</b> · <span style="text-decoration:line-through">${esc(c.desc)}</span>
+          <div class="hint">Motivo: ${esc(c.cancelada.motivo)} · por ${esc(c.cancelada.user)} em ${fmtDate(c.cancelada.data)} ${esc(c.cancelada.hora||"")} · não soma no total</div></td>
+        <td><div style="display:flex;gap:4px;flex-wrap:wrap">${(c.cats||[]).map(x=>`<span class="badge">${esc(x)}</span>`).join("")}</div></td>
+        <td>${esc(c.vend)}</td><td>${esc(payTxt(c))}</td><td><span class="chip">Cancelada</span></td>
+        <td class="num tnum" style="text-decoration:line-through">${brl(c.valor)}</td></tr>`;
   const sel=(id,lbl,opts,val)=>`<div class="field" style="min-width:140px;flex:1"><label>${lbl}</label>${optSel(id,opts,val)}</div>`;
   const porPay=pays.map(p=>[p,lista.reduce((s,v)=>s+pagsDe(v).filter(x=>x.pay===p).reduce((t,x)=>t+x.valor,0),0)]).filter(x=>x[1]>0);
   $("#view").innerHTML=`
@@ -782,22 +792,24 @@ function viewVendas(){
       <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end">
         ${sel("f_vend","Vendedor",vendedores,VF.vend)}
         ${sel("f_tipo","Tipo de venda",["Loja física","Online"],VF.tipo)}
-        ${sel("f_pay","Pagamento",[...pays,"Devolução"],VF.pay)}
+        ${sel("f_pay","Pagamento",[...pays,"Devolução","Cancelada"],VF.pay)}
         ${sel("f_cat","Categoria",cats,VF.cat)}
         <button class="btn ghost" id="f_clear" ${ativo?"":"disabled"} style="padding:9px 14px">Limpar filtros</button>
       </div>
       <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;font-size:13px">
         <span class="chip ${ativo?"warn":"good"}">${lista.length} de ${VENDAS.length} venda(s) · ${brl(totFil)}</span>
         ${devs.length?`<span class="chip crit">${devs.length} devolução(ões) · ${brl(devs.reduce((s,d)=>s+d.valor,0))} (não somam)</span>`:""}
+        ${cancs.length?`<span class="chip">${cancs.length} cancelada(s) · ${brl(cancs.reduce((s,c)=>s+c.valor,0))} (não somam)</span>`:""}
         ${porPay.map(([p,v])=>`<span class="pay" style="color:var(--muted)"><span class="dot" style="background:${payIcon(p)}"></span>${esc(p)}: <b class="tnum" style="color:var(--fg)">${brl(v)}</b></span>`).join("")}
       </div>
       ${VF.cat?`<div class="hint">Filtro de categoria mostra as vendas que têm ao menos uma peça de ${esc(VF.cat)}; o valor é o total da venda.</div>`:""}
     </div></div>
     <div class="card"><div class="card-b pad0"><div class="tw"><table>
       <thead><tr><th>Data</th><th>Descrição</th><th>Categoria</th><th>Vendedor</th><th>Pagamento</th><th>Tipo</th><th class="num">Valor</th></tr></thead>
-      <tbody>${linhas.length?linhas.map(({v,d})=>{ if(d) return linhaDev(d); const podeDev=(v.itens||[]).length>0, jaDev=devDaVenda(v).reduce((s,x)=>s+x.qtd,0);
+      <tbody>${linhas.length?linhas.map(({v,d,c})=>{ if(d) return linhaDev(d); if(c) return linhaCanc(c); const podeDev=(v.itens||[]).length>0, jaDev=devDaVenda(v).reduce((s,x)=>s+x.qtd,0);
         return `<tr ${podeDev?`data-vdev="${VENDAS.indexOf(v)}" style="cursor:pointer" title="Clique para fazer a devolução / troca desta venda"`:""}>
-        <td class="tnum" style="white-space:nowrap">${fmtDate(v.dataISO)}${v.hora?`<div class="hint">${v.hora}</div>`:""}${podeDev?`<div><span class="chip" style="font-size:11px;margin-top:4px">↩ Devolver</span></div>`:""}</td>
+        <td class="tnum" style="white-space:nowrap">${fmtDate(v.dataISO)}${v.hora?`<div class="hint">${v.hora}</div>`:""}
+          <div style="display:flex;flex-direction:column;gap:3px;margin-top:4px;align-items:flex-start">${podeDev?`<span class="chip" style="font-size:11px">↩ Devolver</span>`:""}${jaDev?"":`<button type="button" class="chip" data-vcan="${VENDAS.indexOf(v)}" style="font-size:11px;border:0;cursor:pointer;color:var(--crit)" title="Cancelar esta venda (senha do administrador)">✕ Cancelar</button>`}</div></td>
         <td style="min-width:220px">${jaDev?`<div class="hint" style="color:var(--crit);font-weight:700">↩ ${jaDev} peça(s) já devolvida(s)</div>`:""}${v.imp?`<span style="color:var(--muted);font-style:italic">${esc(v.desc)}</span> <span class="badge">importado</span>`:esc(v.desc)}${v.nova?`<div class="hint">baixou ${v.itens.reduce((s,i)=>s+i.qtd,0)} peça(s) do estoque</div>`:""}${v.vale?`<div class="hint" style="color:#0e8a8a">troca: ${brl(v.vale.valor)} em vale ${esc(v.vale.cod)} · compra de ${brl(v.valor+v.vale.valor)} · entrou ${brl(v.valor)}</div>`:""}${v.cli||v.cbUsado?`<div class="hint" style="color:#b8860b">${v.cli?`cliente: ${esc(v.cli.nome||"")} ${esc(telFmt(v.cli.tel))}`:""}${v.cbUsado?` · usou ${brl(v.cbUsado)} de cashback`:""}${v.cbGanho?` · ganhou ${brl(v.cbGanho)}`:""}</div>`:""}</td>
         <td><div style="display:flex;gap:4px;flex-wrap:wrap">${(v.cats||[]).map(c=>`<span class="badge" style="${c===VF.cat?"background:var(--accent-soft);color:var(--accent)":""}">${esc(c)}</span>`).join("")}</div></td>
         <td>${esc(v.vend)}</td>
@@ -815,6 +827,7 @@ function viewVendas(){
     $("#"+id).addEventListener("change",e=>{VF[k]=e.target.value;viewVendas();}));
   $("#f_clear").addEventListener("click",()=>{VF=novoVF();viewVendas();});
   $("#view").querySelectorAll("[data-vdev]").forEach(r=>r.addEventListener("click",e=>{ if(e.target.closest("a,button,input,select")) return; modalNovaDevolucao(VENDAS[+r.dataset.vdev]); }));
+  $("#view").querySelectorAll("[data-vcan]").forEach(b=>b.addEventListener("click",e=>{ e.stopPropagation(); cancelarVenda(VENDAS[+b.dataset.vcan]); }));
 }
 
 // re-renderiza mantendo o foco/cursor no campo de filtro que estava sendo digitado
@@ -2089,7 +2102,7 @@ function viewPDV(){
     const hora=dataISO===hojeISO()?new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}):"";
     const cx=dataISO===hojeISO()?caixaAberto():null;
     // valor = o que o cliente pagou; o vale usado fica guardado à parte (não entra de novo no faturamento)
-    const v={id:VENDAS.length+1,desc:descr,valor,desconto:desc(),vend:$("#v_vend").value,pay:fin.pay,...(fin.pags?{pags:fin.pags}:{}),tipo,nova:true,dataISO,hora,
+    const v={id:VENDAS.length+1,desc:descr,valor,desconto:desc(),...(fr?{frete:fr}:{}),vend:$("#v_vend").value,pay:fin.pay,...(fin.pags?{pags:fin.pags}:{}),tipo,nova:true,dataISO,hora,
       itens:cart.map(i=>({sku:i.p.sku,qtd:i.qtd,preco:i.preco,cat:i.p.cat})),cats:[...new Set(cart.map(i=>i.p.cat))],...(func?{func}:{}),
       ...(fin.vale?{vale:fin.vale}:{}),...(cx?{cx:cx.id}:{}),
       ...(fin.cli?{cli:{tel:fin.cli.tel,nome:fin.cli.nome}}:{}),...(fin.cb?{cbUsado:fin.cb}:{}),...(fin.ganho?{cbGanho:fin.ganho}:{})};
@@ -2363,6 +2376,48 @@ function precoPago(p){
 }
 // peças já devolvidas de uma venda (a devolução guarda a venda de origem)
 const devDaVenda=v=>DEVOLUCOES.filter(d=>d.venda&&d.venda.id===v.id&&d.venda.data===v.dataISO&&(d.venda.hora||"")===(v.hora||"")).flatMap(d=>d.itens);
+/* ---------------- CANCELAMENTO DE VENDA ----------------
+   Desfaz a venda inteira: peças voltam ao estoque, sai do faturamento e do caixa, o cashback ganho é retirado,
+   o cashback e o vale usados voltam para o cliente. A venda sai de VENDAS e fica em CANCELADAS (aparece riscada em Vendas). */
+let CANCELADAS=[];
+function cancelarVenda(v){
+  if(!v) return;
+  if(devDaVenda(v).length) return toast("Esta venda já teve devolução. Para desfazer o resto, use a devolução das peças que faltam.");
+  const cx=v.cx?CAIXAS.find(c=>c.id===v.cx):null, ganhoUsado=v.cbGanho?CASHBACKS.filter(c=>c.venda===v.id&&v.cli&&c.tel===v.cli.tel&&c.data===v.dataISO).reduce((s,c)=>s+(c.valor-c.saldo),0):0;
+  const lin=(t,cor)=>`<li style="margin:2px 0${cor?";color:"+cor:""}">${t}</li>`;
+  modal(`<h3 style="color:var(--crit)">Cancelar venda?</h3>
+    <div class="infobox" style="gap:2px"><b>${fmtDate(v.dataISO)}${v.hora?` às ${esc(v.hora)}`:""} · ${brl(v.valor)} · ${esc(payTxt(v))} · ${esc(v.vend||"")}</b><div class="hint">${esc(v.desc)}</div></div>
+    <ul style="margin:0;padding-left:18px;font-size:13px">
+      ${(v.itens||[]).length?lin(`${v.itens.reduce((s,i)=>s+i.qtd,0)} peça(s) voltam para o estoque`):""}
+      ${lin(`${brl(v.valor)} sai do faturamento${cx&&!cx.fech?" e do caixa aberto":""}`)}
+      ${v.vale?lin(`${brl(v.vale.valor)} voltam para o vale ${esc(v.vale.cod)}`):""}
+      ${v.cbUsado?lin(`${brl(v.cbUsado)} de cashback usado voltam para o cliente`):""}
+      ${v.cbGanho?lin(`o cashback ganho nesta venda (${brl(v.cbGanho)}) é retirado${ganhoUsado>0.009?` — ${brl(ganhoUsado)} dele já foi usado em outra compra`:""}`,ganhoUsado>0.009?"var(--warn)":""):""}
+      ${v.pedidoSite?lin(`o pedido #${v.pedidoSite} do site volta para "Confirmado"`):""}
+      ${cx&&cx.fech?lin(`o caixa de ${fmtDate(cx.data)} já foi fechado: o fechamento impresso não muda`,"var(--warn)"):""}
+      ${v.descontado?lin("esta venda já foi descontada na folha do funcionário","var(--warn)"):""}
+    </ul>
+    <div class="field"><label>Motivo do cancelamento <span class="req">*</span></label><input class="inp" id="cv_mot" placeholder="Ex.: lançada em duplicidade, cliente desistiu…" maxlength="160"></div>
+    <div class="err" id="cv_err"></div>
+    <div class="row"><button class="btn ghost" data-close>Voltar</button><button class="btn" id="cv_ok" style="background:var(--crit)">🔒 Cancelar venda</button></div>`,"wide");
+  setTimeout(()=>$("#cv_mot")?.focus(),40);
+  $("#cv_ok").addEventListener("click",()=>{
+    const motivo=$("#cv_mot").value.trim(); if(!motivo) return $("#cv_err").textContent="Informe o motivo do cancelamento.";
+    askAdminPw(()=>{
+      const k=VENDAS.indexOf(v); if(k<0) return toast("Esta venda não está mais na lista.");
+      (v.itens||[]).forEach(i=>{ const p=ESTOQUE.find(x=>x.sku===i.sku); if(p) p.qtd+=i.qtd; });
+      somaFaturamento(v.dataISO,-v.valor,v.tipo,-(v.frete||0));
+      if(v.vale){ const d=DEVOLUCOES.find(x=>x.id===v.vale.id); if(d) d.saldo=+(d.saldo+v.vale.valor).toFixed(2); }
+      if(v.cbGanho&&v.cli) CASHBACKS=CASHBACKS.filter(c=>!(c.venda===v.id&&c.tel===v.cli.tel&&c.data===v.dataISO));
+      if(v.cbUsado&&v.cli) CASHBACKS.push({id:CASHBACKS.reduce((m,x)=>Math.max(m,x.id),0)+1,tel:v.cli.tel,venda:0,estorno:true,data:hojeISO(),
+        valor:v.cbUsado,saldo:v.cbUsado,validade:somaDiasISO(hojeISO(),CONFIG.cashDias)});
+      if(v.pedidoSite&&typeof lojaPedidoStatus==="function") lojaPedidoStatus(v.pedidoSite,"confirmado",true);
+      VENDAS.splice(k,1);
+      CANCELADAS.push({...v,cancelada:{data:hojeISO(),hora:horaAgora(),user:SESSION.name,motivo}});
+      closeModal(); if(PDV.ultima===v) PDV.ultima=null; viewVendas(); toast(`Venda de ${brl(v.valor)} cancelada.`);
+    },`Cancelar a venda de ${brl(v.valor)}. Confirme com a senha do administrador.`);
+  });
+}
 // sem venda: bipa as peças; com venda (clique na aba Vendas): já vem com o cliente e as peças daquela venda
 function modalNovaDevolucao(venda){
   const itens=[]; // {p,qtd,preco,de,max}
@@ -3901,6 +3956,7 @@ const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
     comissao:  [()=>COMISSAO,    v=>{COMISSAO.splice(0,COMISSAO.length,...v);}],
     saidas:    [()=>SAIDAS,      v=>{SAIDAS=v;}], // condicional / costureira
     devolucoes:[()=>DEVOLUCOES,  v=>{DEVOLUCOES=v;}], // trocas / vale-troca
+    canceladas:[()=>CANCELADAS,  v=>{CANCELADAS=v;}], // vendas canceladas (saem de VENDAS, ficam aqui para consulta)
     caixas:    [()=>CAIXAS,      v=>{CAIXAS=v;}],     // abertura e fechamento de caixa
     clientes:  [()=>CLIENTES,    v=>{CLIENTES=v;}],   // cadastro de clientes (telefone)
     cashbacks: [()=>CASHBACKS,   v=>{CASHBACKS=v;}],  // créditos de cashback por venda
