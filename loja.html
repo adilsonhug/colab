@@ -287,6 +287,7 @@ function abreProduto(id,tamPre){
       <div class="dados">
         <div><h3>${esc(p.nome)}</h3><div style="color:var(--muted)">${esc(p.cor||"")}</div></div>
         <div class="pr" id="pp">${brl(precoDe(p))}</div>
+        <div id="pref" style="font-size:12px;color:var(--muted);margin-top:-8px"></div>
         ${p.desc?`<div class="desc">${esc(p.desc)}</div>`:""}
         ${outras.length>1?`<div><div class="lbl" style="margin-bottom:6px">Cor</div><div class="cores">${outras.map(o=>`<button data-cor="${esc(o.id)}" class="${o.id===p.id?"on":""}">${esc(o.cor||"—")}${disp(o).length?"":" (esgotado)"}</button>`).join("")}</div></div>`:""}
         <div><div class="lbl" style="margin-bottom:6px">Tamanho</div><div class="tamsel">${p.tams.map(t=>`<button data-t="${esc(t.t)}" ${t.ok?"":"disabled"} class="${t.t===tam?"on":""}">${esc(t.t)}</button>`).join("")}</div></div>
@@ -299,6 +300,7 @@ function abreProduto(id,tamPre){
   const resta=()=>{ const t=p.tams.find(x=>x.t===tam); return t?Math.max(0,maxDe(t)-naSacola(p.id,tam)):10; };
   const pinta=()=>{ document.querySelectorAll(".tamsel button").forEach(b=>b.classList.toggle("on",b.dataset.t===tam));
     const t=p.tams.find(x=>x.t===tam); $("#pp").textContent=brl(t?t.preco:precoDe(p));
+    $("#pref").textContent=t?`Ref. ${t.sku}${t.ean?` · Cód. ${t.ean}`:""}`:"";
     if(tam&&qtd>resta()) qtd=Math.max(1,resta()); $("#qn").textContent=qtd; };
   document.querySelectorAll(".tamsel button").forEach(b=>b.onclick=()=>{ tam=b.dataset.t; $("#perr").textContent=""; pinta();
     if(!resta()) $("#perr").textContent="Você já colocou na sacola todas as peças desse tamanho."; });
@@ -403,7 +405,7 @@ function abreSacola(aviso){
       <div class="form">
         <div class="lbl">Como você quer receber?</div>
         <div class="opc">${ret?`<label><input type="radio" name="modo" value="retirar" ${modo==="retirar"?"checked":""}>Retirar na loja<small>${esc(LOJA.endereco||"sem custo")}</small></label>`:""}
-          ${ent?`<label><input type="radio" name="modo" value="entregar" ${modo==="entregar"?"checked":""}>Entrega<small>${LOJA.taxa?brl(LOJA.taxa):"taxa a combinar"}${LOJA.entregaTxt?" · "+esc(LOJA.entregaTxt):""}${gratisTxt()?`<br><b style="color:var(--good)">${esc(gratisTxt())}</b>`:""}</small></label>`:""}</div>
+          ${ent?`<label><input type="radio" name="modo" value="entregar" ${modo==="entregar"?"checked":""}>Entrega<small>frete calculado pelo CEP${LOJA.entregaTxt?" · "+esc(LOJA.entregaTxt):""}${gratisTxt()?`<br><b style="color:var(--good)">${esc(gratisTxt())}</b>`:""}</small></label>`:""}</div>
         <div class="f"><label for="cn">Seu nome *</label><input id="cn" autocomplete="name" value="${esc(CLI.nome||"")}"></div>
         <div class="f"><label for="ct">WhatsApp com DDD *</label><input id="ct" inputmode="tel" autocomplete="tel" placeholder="(49) 9…" value="${esc(CLI.tel||"")}"></div>
         <div id="fend" ${modo==="entregar"?"":"hidden"} style="display:flex;flex-direction:column;gap:12px">
@@ -431,7 +433,7 @@ function abreSacola(aviso){
     i.qtd=Math.max(1,i.qtd+d); salvaSacola(); abreSacola(); });
   document.querySelectorAll("[data-rm]").forEach(b=>b.onclick=()=>{ SACOLA.splice(+b.dataset.rm,1); salvaSacola(); abreSacola(); });
   const conta=()=>{ if(!$("#tg")) return; const uf=$("#cu").value, f=frete(modo,uf,sub);
-    $("#tfr").innerHTML=f.gratis?`<b style="color:var(--good)">Grátis</b>`:(f.taxa?brl(f.taxa):"a combinar");
+    $("#tfr").innerHTML=f.gratis?`<b style="color:var(--good)">Grátis</b>`:f.falta?"informe o CEP":brl(f.taxa);
     $("#tg").textContent=brl(sub+f.taxa); $("#fgaviso").innerHTML=modo==="entregar"?f.aviso:""; };
   document.querySelectorAll("input[name=modo]").forEach(r=>r.onchange=()=>{ modo=r.value; $("#fend").hidden=modo!=="entregar"; $("#ttx").hidden=modo!=="entregar"; conta(); });
   $("#cu")?.addEventListener("change",conta); conta();
@@ -454,17 +456,20 @@ function abreSacola(aviso){
 }
 // frete: grátis a partir do valor mínimo para os estados das regiões marcadas no app
 const UFS=["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"];
-const gratisTxt=()=>LOJA.entrega&&+LOJA.gratisMin>0&&(LOJA.gratisUF||[]).length?`Frete grátis acima de ${brl(LOJA.gratisMin)} para ${(LOJA.gratisReg||[]).join(" e ").replace(/ e (?=.* e )/g,", ")}`:"";
+// tabela de frete do app: até "ate" = fixo; acima = % das peças; a partir de "gratis" = grátis (0 = sem frete grátis)
+const FR=()=>LOJA.frete||{regA:["Sul","Sudeste"],ufA:["PR","SC","RS","SP","RJ","MG","ES"],a:{ate:200,fixo:31.9,pct:13,gratis:450},b:{ate:200,fixo:39.9,pct:15,gratis:650}};
+const juntaE=l=>l.join(", ").replace(/, ([^,]*)$/," e $1");
+const gratisTxt=()=>{ if(!LOJA.entrega) return ""; const f=FR(), a=+f.a.gratis>0, b=+f.b.gratis>0;
+  if(a&&b) return `Frete grátis acima de ${brl(f.a.gratis)} para ${juntaE(f.regA)} e acima de ${brl(f.b.gratis)} para as demais regiões`;
+  if(a) return `Frete grátis acima de ${brl(f.a.gratis)} para ${juntaE(f.regA)}`;
+  if(b) return `Frete grátis acima de ${brl(f.b.gratis)} fora de ${juntaE(f.regA)}`; return ""; };
 function frete(modo,uf,sub){
   if(modo!=="entregar") return {taxa:0,gratis:false,aviso:""};
-  const min=+LOJA.gratisMin||0, regiao=(LOJA.gratisUF||[]).includes(uf), base=+LOJA.taxa||0;
-  if(min>0&&regiao&&sub>=min) return {taxa:0,gratis:true,aviso:`<span style="color:var(--good)">🚚 Você ganhou frete grátis!</span>`};
-  let aviso="";
-  if(min>0&&(LOJA.gratisUF||[]).length){
-    if(!uf||regiao) aviso=`🚚 Faltam <b>${brl(min-sub)}</b> para ganhar frete grátis${uf?"":` (${(LOJA.gratisReg||[]).join(" e ")})`}.`;
-    else aviso=`Frete grátis só para ${(LOJA.gratisReg||[]).join(" e ")}. Para ${esc(uf)} o frete é combinado pelo WhatsApp.`;
-  }
-  return {taxa:regiao||!min?base:(uf?0:base),gratis:false,aviso,combinar:!!uf&&!regiao&&min>0};
+  if(!uf) return {taxa:0,gratis:false,falta:true,aviso:"Informe o CEP para calcular o frete."};
+  const f=FR(), g=(f.ufA||[]).includes(uf)?f.a:f.b, gr=+g.gratis||0;
+  if(gr>0&&sub>=gr) return {taxa:0,gratis:true,aviso:`<span style="color:var(--good)">🚚 Você ganhou frete grátis!</span>`};
+  const taxa=+(sub<=+g.ate?+g.fixo:sub*(+g.pct||0)/100).toFixed(2);
+  return {taxa,gratis:false,aviso:gr>0?`🚚 Faltam <b>${brl(gr-sub)}</b> para ganhar frete grátis.`:""};
 }
 const fmtCep=d=>{ d=String(d||"").replace(/\D/g,"").slice(0,8); return d.length>5?d.slice(0,5)+"-"+d.slice(5):d; };
 // endereço pelo CEP (ViaCEP, serviço público e gratuito)
@@ -499,14 +504,21 @@ async function enviar(modo){
   L=linhas(); ok=L.filter(l=>l.ok);
   CLI={nome,tel,modo,...(modo==="entregar"?ender:{uf:CLI.uf,cep:CLI.cep,rua:CLI.rua,num:CLI.num,comp:CLI.comp,bairro:CLI.bairro,cidade:CLI.cidade})}; ls.set("colab_cliente",CLI);
   const sub=ok.reduce((s,l)=>s+l.preco*l.i.qtd,0), fr=frete(modo,uf,sub), taxa=fr.taxa;
-  const itens=ok.map(l=>({id:l.p.id,sku:l.t.sku,nome:l.p.nome,cor:l.p.cor,tam:l.i.tam,qtd:l.i.qtd,preco:l.preco}));
+  const itens=ok.map(l=>({id:l.p.id,sku:l.t.sku,ean:l.t.ean||"",foto:fotosP(l.p)[0]||"",nome:l.p.nome,cor:l.p.cor,tam:l.i.tam,qtd:l.i.qtd,preco:l.preco}));
   const dados={nome,tel,entrega:modo,endereco:end,uf:modo==="entregar"?uf:"",cep:modo==="entregar"?cep:"",freteGratis:fr.gratis,obs,itens,subtotal:+sub.toFixed(2),taxa,total:+(sub+taxa).toFixed(2)};
   let num=null;
-  try{ const {data,error}=await sb.rpc("loja_pedido_criar",{p_dados:dados}); if(!error) num=data; }catch(e){}
+  let semEstoque="";
+  try{ const {data,error}=await sb.rpc("loja_pedido_criar",{p_dados:dados}); if(!error) num=data; else if(/sem_estoque/.test(error.message||"")) semEstoque=String(error.message).replace(/^.*sem_estoque:?\s*/,""); }catch(e){}
+  // alguém pediu a mesma peça segundos antes: a loja reservou para essa pessoa
+  if(semEstoque){
+    try{ await carregar(); }catch(e){}
+    const L2=linhas(); SACOLA=L2.filter(l=>l.ok).map(l=>l.i); ajustaSacola(); salvaSacola(); render();
+    abreSacola(`Acabou de ser reservada para outro cliente: ${semEstoque}. Ajustamos a sua sacola — confira e envie de novo.`); return;
+  }
   const msg=[`Olá! Quero fazer um pedido${num?` (#${num})`:""}:`,"",
-    ...itens.map(i=>`• ${i.qtd}× ${i.nome} ${i.cor||""} — Tam. ${i.tam} — ${brl(i.preco*i.qtd)}`),"",
+    ...itens.map(i=>`• ${i.qtd}× ${i.nome} ${i.cor||""} — Tam. ${i.tam} — ${brl(i.preco*i.qtd)}\n   Ref. ${i.sku}${i.ean?` · Cód. barras ${i.ean}`:""}`),"",
     `Peças: ${brl(sub)}`,
-    modo==="entregar"?`Entrega: ${fr.gratis?"FRETE GRÁTIS":taxa?brl(taxa):"a combinar"}\n${end}`:"Retirar na loja",
+    modo==="entregar"?`Frete: ${fr.gratis?"GRÁTIS":brl(taxa)}\n${end}`:"Retirar na loja",
     `*Total: ${brl(sub+taxa)}*`,"",`Nome: ${nome}`,obs?`Obs.: ${obs}`:""].filter(x=>x!==null).join("\n").replace(/\n{3,}/g,"\n\n").trim();
   const url=`https://wa.me/55${LOJA.whats}?text=${encodeURIComponent(msg)}`;
   SACOLA=[]; salvaSacola();
