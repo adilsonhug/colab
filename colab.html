@@ -1968,6 +1968,10 @@ function viewPDV(){
     $("#v_code").value=""; fechaSug();
     const it=cart.find(i=>i.p===p), ja=it?it.qtd:0;
     if(ja+1>p.qtd&&!ehGenerico(p)) return msg(`Sem estoque de ${p.nome} (${p.cor} · ${p.tam}): ${p.qtd} un. disponíveis.`);
+    // peça segurada por pedido do site (o pedido que está virando esta venda não conta)
+    const rs=ehGenerico(p)?[]:reservasDe(p.sku,PDV.pref&&PDV.pref.pedido), rq=rs.reduce((s,x)=>s+x.qtd,0);
+    if(rq&&ja+1>p.qtd-rq&&!confirm(`🔒 ${p.nome} ${p.cor} · ${p.tam} está reservada para ${rs.map(x=>`o pedido #${x.pedido} do site${x.nome?` (${x.nome})`:""}`).join(" e ")}.\n\nEstoque ${p.qtd}, reservado ${rq}. Vender mesmo assim?`))
+      return msg(`Peça reservada para pedido do site — não adicionada.`);
     if(it) it.qtd++; else cart.push({p,qtd:1,preco:p.preco});
     if(ehGenerico(p)&&!it){ msg("Item genérico: digite o preço certo na coluna Unit.",false); draw();
       setTimeout(()=>{const x=$(`#v_cart [data-pr="${cart.length-1}"]`); x?.focus(); x?.select();},30); return; }
@@ -2028,6 +2032,7 @@ function viewPDV(){
   $("#v_ver")?.addEventListener("click",()=>{current="vendas";renderNav();route();});
   $("#v_wa")?.addEventListener("click",()=>abrirAgradecimento(PDV.ultima));
   if(PDV.pref&&PDV.pref.pay) $("#v_pay").value=PDV.pref.pay; // veio do retorno de funcionário: já em desconto em folha
+  if(PDV.pref&&PDV.pref.vend&&[...$("#v_vend").options].some(o=>o.value===PDV.pref.vend)) $("#v_vend").value=PDV.pref.vend; // pedido do site: quem atendeu
   draw(); setTimeout(()=>$("#v_code")?.focus(),50);
 
   $("#v_save").addEventListener("click",()=>{
@@ -2113,7 +2118,9 @@ function viewPDV(){
       if(fin.ganho) CASHBACKS.push({id:CASHBACKS.reduce((m,x)=>Math.max(m,x.id),0)+1,tel:fin.cli.tel,venda:v.id,data:dataISO,
         valor:fin.ganho,saldo:fin.ganho,base:+Math.max(0,valor-fr).toFixed(2),validade:somaDiasISO(dataISO,CONFIG.cashDias)});
     }
-    const ped=PDV.pref&&PDV.pref.pedido; if(ped){ v.pedidoSite=ped; lojaPedidoStatus(ped,"vendido",true); }
+    // primeiro publica o estoque já baixado, depois libera a reserva — assim a peça não reaparece no site no meio do caminho
+    const ped=PDV.pref&&PDV.pref.pedido; if(ped){ v.pedidoSite=ped; const pe=(LOJA_PED||[]).find(x=>x.id===ped); if(pe) pe.status="vendido";
+      Promise.resolve(lojaPublicar(true)).catch(()=>{}).finally(()=>lojaPedidoStatus(ped,"vendido",true)); }
     VENDAS.push(v); somaFaturamento(dataISO,valor,tipo,fr);
     PDV={cart:[],ultima:v}; viewPDV(); toast(`Venda de ${brl(valor)} registrada.${fin.ganho?` Cliente ganhou ${brl(fin.ganho)} de cashback.`:" Estoque baixado."}`);
   }
@@ -2747,25 +2754,35 @@ function lojaModelos(){
 const fotosDe=m=>m&&Array.isArray(m.fotos)?m.fotos.filter(Boolean):(m&&m.foto?[m.foto]:[]);
 const LOJA_MAXFOTOS=6, LOJA_MAXQTD=10;
 // o que vai para o site: só modelos marcados; de cada tamanho, se tem e até quantas dá para pedir (máx. 10 — o site não mostra o número)
-function lojaDados(){
+// real=true: manda o estoque de verdade (loja_publicar2 desconta as reservas e limita a 10 antes de mostrar no site)
+function lojaDados(real){
   const c=lojaCfg();
   const prods=lojaModelos().filter(x=>x.on).map(x=>{ const t={};
     x.tams.forEach(p=>{ const k=String(p.tam); if(!t[k]) t[k]={t:k,ok:false,n:0,sku:p.sku,ean:p.ean||"",preco:+p.preco||0};
-      if(p.qtd>0&&!t[k].ok) Object.assign(t[k],{ok:true,n:Math.min(LOJA_MAXQTD,p.qtd),sku:p.sku,ean:p.ean||"",preco:+p.preco||0}); });
+      if(p.qtd>0&&!t[k].ok) Object.assign(t[k],{ok:true,n:real?p.qtd:Math.min(LOJA_MAXQTD,p.qtd),sku:p.sku,ean:p.ean||"",preco:+p.preco||0}); });
     return {id:x.k,nome:x.nome,cor:x.cor,cat:x.cat,desc:x.desc,foto:x.foto,fotos:x.fotos,preco:x.preco,tams:Object.values(t)}; });
   return {loja:{whats:telNum(c.whats),insta:String(c.insta||"").replace(/^@/,""),texto:c.texto,entrega:!!c.entrega,taxa:+c.taxa||0,
     entregaTxt:c.entregaTxt,retirada:!!c.retirada,endereco:c.endereco,
     frete:{...c.frete,ufA:c.frete.regA.flatMap(r=>REGIOES[r]||[])}},prods};
 }
 let LOJA_PUB="", LOJA_ST={ok:null,msg:"",quando:""}, LOJA_TENT=0, LOJA_PED=null, LOJA_PED_ERR="", LOJA_PED_T=0;
+let LOJA_V2=null; // null = ainda não sabe; true = banco tem a reserva (loja-reserva.sql); false = versão antiga
+const semFuncao=e=>/function|não encontr|not find|schema|does not exist/i.test(String(e&&e.message||e));
 const lojaUrl=()=>location.origin+"/loja";
 async function lojaPublicar(forca){
   if(!window.DB||!DB.ok()) return;
-  const d=lojaDados(), s=JSON.stringify(d);
+  const d=lojaDados(true), s=JSON.stringify(d);
   if(!forca&&(s===LOJA_PUB||(!LOJA_PUB&&!d.prods.length))) return;
   if(!forca&&LOJA_ST.ok===false&&Date.now()-LOJA_TENT<120000) return; // deu erro: tenta de novo a cada 2 min
   LOJA_TENT=Date.now();
-  try{ await DB.loja("loja_publicar",{p_dados:d}); LOJA_PUB=s; LOJA_ST={ok:true,msg:"",quando:horaAgora()}; }
+  try{
+    if(LOJA_V2!==false){
+      try{ await DB.loja("loja_publicar2",{p_dados:d}); LOJA_V2=true; }
+      catch(e){ if(!semFuncao(e)) throw e; LOJA_V2=false; }
+    }
+    if(LOJA_V2===false) await DB.loja("loja_publicar",{p_dados:lojaDados()}); // banco antigo: sem reserva, quantidade limitada a 10
+    LOJA_PUB=s; LOJA_ST={ok:true,msg:"",quando:horaAgora()};
+  }
   catch(e){ LOJA_ST={ok:false,msg:String(e&&e.message||e),quando:horaAgora()}; }
   const el=$("#lj_st"); if(el) el.innerHTML=lojaStTxt();
 }
@@ -2784,12 +2801,44 @@ async function lojaCarregaPedidos(){
 }
 const busyLoja=()=>!!$("#modalHost").innerHTML.trim()||(document.activeElement&&/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName));
 const lojaNovos=()=>(LOJA_PED||[]).filter(p=>p.status==="novo").length;
+const pedAberto=p=>p&&(p.status==="novo"||p.status==="confirmado");
+// peças seguradas por pedidos do site em aberto: [{pedido, qtd}] por código; "menos" = pedido que está virando venda agora
+function reservasDe(sku,menos){
+  const r=[]; (LOJA_PED||[]).forEach(p=>{ if(!pedAberto(p)||p.id===menos) return;
+    const q=(p.dados&&p.dados.itens||[]).filter(i=>i.sku===sku).reduce((s,i)=>s+Math.max(1,parseInt(i.qtd)||1),0);
+    if(q) r.push({pedido:p.id,qtd:q,nome:(p.dados.nome||"").split(" ")[0]}); });
+  return r;
+}
+const reservado=(sku,menos)=>reservasDe(sku,menos).reduce((s,x)=>s+x.qtd,0);
+// todos os usuários leem os pedidos (para a Nova venda avisar de peça reservada); a aba Loja continua só do administrador
 setInterval(()=>{ lojaPublicar();
-  if(SESSION&&SESSION.role==="admin"&&Date.now()-LOJA_PED_T>(current==="loja"?20000:60000)) lojaCarregaPedidos(); },15000);
+  if(SESSION&&Date.now()-LOJA_PED_T>(current==="loja"?20000:60000)) lojaCarregaPedidos(); },15000);
 async function lojaPedidoStatus(id,st,quieto){
   const p=(LOJA_PED||[]).find(x=>x.id===id); if(p) p.status=st;
   try{ await DB.loja("loja_pedido_status",{p_id:id,p_status:st}); }catch(e){ toast("Não foi possível atualizar o pedido: "+(e.message||e)); }
   renderNav(); if(!quieto&&current==="loja") viewLoja();
+}
+// "Confirmar": escolhe o vendedor que vai atender o pedido
+function modalAtender(p){
+  if(!p) return;
+  const d=p.dados||{}, vends=USERS.filter(u=>u.ativo!==false);
+  modal(`<h3>Pedido #${p.id} — quem vai atender?</h3>
+    <div class="hint">${esc(d.nome||"")} · ${brl(+d.total||0)}. O pedido fica como <b>"(vendedor) em atendimento"</b> e, ao levar para a Nova venda, o vendedor já vem escolhido.</div>
+    <div class="field"><label>Vendedor <span class="req">*</span></label><select class="inp" id="at_vend"><option value="">Selecione…</option>${vends.map(u=>`<option ${d.atendente===u.name||(!d.atendente&&SESSION.name===u.name)?"selected":""}>${esc(u.name)}</option>`).join("")}</select></div>
+    <div class="err" id="at_err"></div>
+    <div class="row"><button class="btn ghost" data-close>Cancelar</button><button class="btn" id="at_ok">Confirmar atendimento</button></div>`);
+  $("#at_ok").addEventListener("click",async()=>{
+    const vend=$("#at_vend").value; if(!vend) return $("#at_err").textContent="Escolha o vendedor.";
+    $("#at_ok").disabled=true;
+    try{ await DB.loja("loja_pedido_atender",{p_id:p.id,p_vend:vend}); }
+    catch(e){
+      if(!semFuncao(e)){ $("#at_ok").disabled=false; return $("#at_err").textContent="Não foi possível salvar: "+(e.message||e); }
+      await DB.loja("loja_pedido_status",{p_id:p.id,p_status:"confirmado"}).catch(()=>{});
+      toast("Confirmado, mas o vendedor não foi salvo no banco: rode o arquivo loja-reserva.sql no Supabase.");
+    }
+    p.status="confirmado"; p.dados={...d,atendente:vend};
+    closeModal(); renderNav(); if(current==="loja") viewLoja(); toast(`Pedido #${p.id}: ${vend} em atendimento.`);
+  });
 }
 const FOTOS={}; // ref -> imagem (cache)
 async function lojaFotos(refs){
@@ -2875,13 +2924,13 @@ function viewLoja(){
   LJF.aba==="pedidos"?lojaPedidosHTML():lojaProdutosHTML(mods);
 }
 function lojaPedidosHTML(){
-  const st={novo:["Novo","crit"],confirmado:["Confirmado","warn"],vendido:["Vendido","good"],cancelado:["Cancelado",""]};
+  const st={novo:["Novo","crit"],confirmado:["Em atendimento","warn"],vendido:["Vendido","good"],cancelado:["Cancelado",""]};
   const todos=LOJA_PED||[];
   const lista=todos.filter(p=>LJF.ps==="todos"||(LJF.ps==="abertos"?p.status==="novo"||p.status==="confirmado":p.status===LJF.ps));
   const quando=s=>{ const d=new Date(s); return isNaN(d)?"":`${String(d.getDate()).padStart(2,"0")}/${String(d.getMonth()+1).padStart(2,"0")} ${d.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})}`; };
   $("#lj_corpo").innerHTML=`
     <div class="toolbar" style="gap:10px">
-      <select class="inp" id="lj_ps" style="max-width:220px">${[["abertos","Em aberto (novos e confirmados)"],["vendido","Vendidos"],["cancelado","Cancelados"],["todos","Todos"]].map(([v,l])=>`<option value="${v}" ${LJF.ps===v?"selected":""}>${l}</option>`).join("")}</select>
+      <select class="inp" id="lj_ps" style="max-width:220px">${[["abertos","Em aberto (novos e em atendimento)"],["vendido","Vendidos"],["cancelado","Cancelados"],["todos","Todos"]].map(([v,l])=>`<option value="${v}" ${LJF.ps===v?"selected":""}>${l}</option>`).join("")}</select>
       <button class="btn ghost" id="lj_rec">Buscar pedidos novos</button>
     </div>
     ${LOJA_PED_ERR?`<div class="infobox" style="background:var(--crit-soft);border-color:transparent;margin-bottom:12px">Não foi possível ler os pedidos: ${/function|not find|schema/i.test(LOJA_PED_ERR)?"o banco ainda não tem a loja — rode o arquivo <b>loja-supabase.sql</b> no Supabase.":esc(LOJA_PED_ERR)}</div>`:""}
@@ -2897,25 +2946,27 @@ function lojaPedidosHTML(){
           return `<div style="display:flex;gap:8px;align-items:center;padding:3px 0">
             <div style="width:44px;height:44px;flex:none;border-radius:6px;overflow:hidden;background:var(--surface-2);display:grid;place-items:center;font-size:9px;color:var(--muted)">${foto?`<img data-foto="${esc(foto)}" alt="" style="width:100%;height:100%;object-fit:cover">`:"sem foto"}</div>
             <div style="min-width:0"><div>${i.qtd>1?`<b>${i.qtd}×</b> `:""}${esc(i.nome)} ${esc(i.cor||"")} · <b>${esc(i.tam||"")}</b></div>
-              <div class="hint">Ref. <b>${esc(i.sku||"—")}</b>${ean?` · Cód. ${esc(ean)}`:""}${prod?` · estoque ${prod.qtd||0}`:` · <span style="color:var(--crit)">fora do estoque</span>`}</div></div></div>`; }).join("")}${d.obs?`<div class="hint">Obs.: ${esc(d.obs)}</div>`:""}</td>
+              <div class="hint">Ref. <b>${esc(i.sku||"—")}</b>${ean?` · Cód. ${esc(ean)}`:""}${prod?` · estoque ${prod.qtd||0}${pedAberto(p)?` · <span style="color:var(--warn);font-weight:700">🔒 reservada</span>`:""}`:` · <span style="color:var(--crit)">fora do estoque</span>`}</div></div></div>`; }).join("")}${d.obs?`<div class="hint">Obs.: ${esc(d.obs)}</div>`:""}</td>
         <td class="num tnum"><b>${brl(+d.total||0)}</b>${d.taxa?`<div class="hint">entrega ${brl(+d.taxa)}</div>`:""}</td>
         <td style="font-size:12px">${d.entrega==="entregar"?`Entregar${d.uf?` · ${esc(d.uf)}`:""}${d.freteGratis?` <span class="chip good">Frete grátis</span>`:""}<div class="hint">${esc(d.endereco||"")}</div>`:"Retirar na loja"}</td>
-        <td><span class="chip ${s[1]}">${s[0]}</span></td>
+        <td><span class="chip ${s[1]}">${p.status==="confirmado"&&d.atendente?`${esc(d.atendente)} em atendimento`:s[0]}</span>${pedAberto(p)?`<div class="hint" style="margin-top:3px">🔒 peças reservadas</div>`:""}</td>
         <td style="text-align:right;white-space:nowrap">
           <a class="btn ghost sm" href="https://wa.me/55${esc(telNum(d.tel||""))}?text=${encodeURIComponent(msg)}" target="_blank" rel="noopener">WhatsApp</a>
-          ${p.status==="novo"?`<button class="btn ghost sm" data-pst="confirmado" data-pid="${p.id}">Confirmar</button>`:""}
+          ${p.status==="novo"?`<button class="btn ghost sm" data-pat="${p.id}">Confirmar</button>`:""}
+          ${p.status==="confirmado"?`<button class="btn ghost sm" data-pat="${p.id}" title="Trocar o vendedor que está atendendo">Trocar vendedor</button>`:""}
           ${p.status==="novo"||p.status==="confirmado"?`<button class="btn sm" data-pvd="${p.id}">Levar para Nova venda</button> <button class="btn ghost sm" data-pst="cancelado" data-pid="${p.id}">Cancelar</button>`:""}
           ${p.status==="cancelado"?`<button class="btn ghost sm" data-pst="novo" data-pid="${p.id}">Reabrir</button>`:""}
         </td></tr>`; }).join("")
       :`<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:24px">${todos.length?"Nenhum pedido nesta situação.":"Nenhum pedido pelo site ainda."}</td></tr>`}</tbody>
     </table></div></div></div>
-    <div class="hint" style="margin-top:10px">O pedido não reserva a peça: confirme com o cliente pelo WhatsApp e use <b>Levar para Nova venda</b> para baixar o estoque e registrar a venda.</div>`;
+    <div class="hint" style="margin-top:10px">${LOJA_V2===false?`<b style="color:var(--crit)">A reserva ainda não está ligada:</b> rode o arquivo <b>loja-reserva.sql</b> no Supabase. `:""}Pedido <b>Novo</b> ou <b>em atendimento</b> segura as peças: o site não deixa outra pessoa pedir a mesma peça e a Nova venda avisa. <b>Levar para Nova venda</b> baixa o estoque de verdade; <b>Cancelar</b> libera as peças.</div>`;
   $("#lj_ps").addEventListener("change",e=>{ LJF.ps=e.target.value; viewLoja(); });
   $("#lj_rec").addEventListener("click",async()=>{ await lojaCarregaPedidos(); viewLoja(); toast("Pedidos atualizados."); });
   $("#lj_corpo").querySelectorAll("[data-pst]").forEach(b=>b.addEventListener("click",()=>{
     const id=+b.dataset.pid, s=b.dataset.pst;
     if(s==="cancelado"&&!confirm(`Cancelar o pedido #${id}?`)) return;
     lojaPedidoStatus(id,s); }));
+  $("#lj_corpo").querySelectorAll("[data-pat]").forEach(b=>b.addEventListener("click",()=>modalAtender((LOJA_PED||[]).find(p=>p.id===+b.dataset.pat))));
   $("#lj_corpo").querySelectorAll("[data-pvd]").forEach(b=>b.addEventListener("click",()=>lojaPedidoVenda((LOJA_PED||[]).find(p=>p.id===+b.dataset.pvd))));
   const pinta=()=>$("#lj_corpo")?.querySelectorAll("img[data-foto]").forEach(i=>{ const f=FOTOS[i.dataset.foto]; if(f&&i.src!==f) i.src=f; });
   pinta(); lojaFotos([...$("#lj_corpo").querySelectorAll("img[data-foto]")].map(i=>i.dataset.foto)).then(pinta);
@@ -2930,7 +2981,7 @@ function lojaPedidoVenda(p){
   if(!itens.length) return toast("Nenhuma peça deste pedido está no estoque.");
   if(PDV.cart.length&&!confirm("A Nova venda já tem peças. Trocar pelas peças deste pedido?")) return;
   PDV.cart=itens; PDV.ultima=null;
-  PDV.pref={tel:telNum(d.tel||""),nome:d.nome||"",pedido:p.id,frete:d.entrega==="entregar"?+d.taxa||0:0};
+  PDV.pref={tel:telNum(d.tel||""),nome:d.nome||"",pedido:p.id,frete:d.entrega==="entregar"?+d.taxa||0:0,...(d.atendente?{vend:d.atendente}:{})};
   current="pdv"; renderNav(); route();
   toast(faltam.length?`Atenção: ${faltam.join("; ")}.`:`Pedido #${p.id} na Nova venda. Confira e finalize.`);
 }
