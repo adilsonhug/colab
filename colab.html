@@ -2111,7 +2111,7 @@ function viewPDV(){
       salvaCliente(fin.cli.tel,fin.cli.nome,fin.cli.promo);
       if(fin.cb) usaCashback(fin.cli.tel,fin.cb);
       if(fin.ganho) CASHBACKS.push({id:CASHBACKS.reduce((m,x)=>Math.max(m,x.id),0)+1,tel:fin.cli.tel,venda:v.id,data:dataISO,
-        valor:fin.ganho,saldo:fin.ganho,validade:somaDiasISO(dataISO,CONFIG.cashDias)});
+        valor:fin.ganho,saldo:fin.ganho,base:+Math.max(0,valor-fr).toFixed(2),validade:somaDiasISO(dataISO,CONFIG.cashDias)});
     }
     const ped=PDV.pref&&PDV.pref.pedido; if(ped){ v.pedidoSite=ped; lojaPedidoStatus(ped,"vendido",true); }
     VENDAS.push(v); somaFaturamento(dataISO,valor,tipo,fr);
@@ -2669,6 +2669,24 @@ function modalCliente(tel){
     closeModal(); viewClientes(); toast("Cliente salvo.");
   });
 }
+// aplica o % e a validade atuais ao cashback já gerado (o que o cliente já usou continua descontado)
+function recalcCashbacks(pctVelho){
+  let n=0;
+  CASHBACKS.forEach(c=>{
+    c.validade=somaDiasISO(c.data,CONFIG.cashDias);
+    if(c.estorno||!c.venda){ n++; return; }      // estorno de cancelamento: devolve o que foi usado, valor fixo
+    const v=VENDAS.find(x=>x.id===c.venda&&x.dataISO===c.data&&x.cli&&x.cli.tel===c.tel);
+    let base=c.base;
+    if(!(base>0)) base=v?Math.max(0,v.valor-(v.frete||0)):(pctVelho>0?c.valor*100/pctVelho:0);
+    if(!(base>0)){ n++; return; }
+    c.base=+base.toFixed(2);
+    const usado=Math.max(0,c.valor-c.saldo), novo=+(base*CONFIG.cashPct/100).toFixed(2);
+    c.valor=novo; c.saldo=+Math.max(0,novo-usado).toFixed(2);
+    if(v) v.cbGanho=novo;
+    n++;
+  });
+  return n;
+}
 function modalConfigCashback(){
   askAdminPw(()=>{
     modal(`<h3>Configurar cashback</h3>
@@ -2676,14 +2694,19 @@ function modalConfigCashback(){
         <div class="field"><label>Percentual sobre a venda (%)</label><input class="inp" id="cf_pct" inputmode="decimal" value="${String(CONFIG.cashPct).replace(".",",")}"></div>
         <div class="field"><label>Validade (dias)</label><input class="inp" id="cf_dias" type="number" min="1" value="${CONFIG.cashDias}"></div>
       </div>
-      <div class="hint">Vale para as próximas vendas. O cashback já gerado mantém o valor e a validade de quando foi ganho. Use 0% para desligar.</div>
+      <label style="display:flex;gap:8px;align-items:flex-start;font-size:13px;font-weight:600;cursor:pointer;margin-top:6px"><input type="checkbox" id="cf_todos" checked style="width:17px;height:17px;margin-top:1px">
+        <span>Recalcular também o cashback já gerado<br><span class="hint" style="font-weight:400">Novo valor = novo % sobre cada compra (menos o que o cliente já usou). Nova validade = data da compra + novos dias. Desmarcado: vale só para as próximas vendas.</span></span></label>
+      <div class="hint">Use 0% para desligar.</div>
       <div class="err" id="cfc_err"></div>
       <div class="row"><button class="btn ghost" data-close>Cancelar</button><button class="btn" id="cfc_ok">Salvar</button></div>`);
     $("#cfc_ok").addEventListener("click",()=>{
       const p=parseNum($("#cf_pct").value), d=parseInt($("#cf_dias").value);
       if(!(p>=0&&p<=50)) return $("#cfc_err").textContent="Percentual entre 0 e 50.";
       if(!(d>=1&&d<=730)) return $("#cfc_err").textContent="Validade entre 1 e 730 dias.";
-      CONFIG={...CONFIG,cashPct:+p.toFixed(2),cashDias:d}; closeModal(); viewClientes(); toast(`Cashback: ${n0(CONFIG.cashPct)}% por ${d} dias.`);
+      const velho=CONFIG.cashPct, todos=$("#cf_todos").checked;
+      CONFIG={...CONFIG,cashPct:+p.toFixed(2),cashDias:d};
+      const n=todos?recalcCashbacks(velho):0;
+      closeModal(); viewClientes(); toast(`Cashback: ${n0(CONFIG.cashPct)}% por ${d} dias.`+(todos?` ${n} crédito(s) recalculado(s).`:""));
     });
   },"Alterar o percentual ou a validade do cashback exige a senha do administrador.");
 }
