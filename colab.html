@@ -202,6 +202,7 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
 .desc-link:hover{opacity:1}
 .desc-box{display:flex;gap:4px;padding-bottom:4px}
 .desc-box .inp{width:58px;padding:5px 6px;font-size:12px}
+.up-ph::placeholder{text-transform:none}
 /* cadastro em grade: quantidade de cada tamanho */
 .grade-tam{margin-top:8px;padding:8px 10px;border:1px dashed var(--border);border-radius:10px;background:var(--surface-2)}
 .grade-lin{display:flex;flex-wrap:wrap;gap:8px}
@@ -1088,7 +1089,7 @@ function modalEditarProduto(i){
       <div class="field"><label>Cor <span class="req">*</span></label><input class="inp" id="e_cor" list="e_cores" value="${esc(p.cor||"")}"><datalist id="e_cores">${cores.map(c=>`<option value="${esc(c)}">`).join("")}</datalist></div>
     </div>
     <div class="field"><label>Modelo <span class="hint" style="font-weight:500">· mesmo modelo + mesma cor = um produto só no site, com os tamanhos juntos</span></label>
-      <input class="inp" id="e_modelo" list="e_modelos" value="${esc(p.modelo||"")}" placeholder="Vazio = liga pela descrição + cor" style="text-transform:uppercase">
+      <input class="inp up-ph" id="e_modelo" list="e_modelos" value="${esc(p.modelo||"")}" placeholder="Vazio = liga pela descrição + cor" style="text-transform:uppercase">
       <datalist id="e_modelos">${modelosCad().map(m=>`<option value="${esc(m.modelo)}">${esc(m.nome)}</option>`).join("")}</datalist>
       <div class="hint" id="e_modhint"></div></div>
     <div class="g g3">
@@ -3846,7 +3847,7 @@ function modalProduto(pre={}){
         <input class="inp" id="p_cor" list="p_cores" placeholder="Ex.: Preto"><datalist id="p_cores">${cores.map(c=>`<option value="${esc(c)}">`).join("")}</datalist></div>
     </div>
     <div class="field"><label>Modelo <span class="hint" style="font-weight:500">· liga os tamanhos da mesma peça (no site vira um produto só, com as mesmas fotos)</span></label>
-      <input class="inp" id="p_modelo" list="p_modelos" placeholder="Vazio = usa o Código acima. Para um tamanho que chegou depois, escolha o modelo existente" style="text-transform:uppercase">
+      <input class="inp up-ph" id="p_modelo" list="p_modelos" placeholder="Vazio = usa o código acima" style="text-transform:uppercase">
       <datalist id="p_modelos">${modelosCad().map(m=>`<option value="${esc(m.modelo)}">${esc(m.nome)}</option>`).join("")}</datalist>
       <div class="hint" id="p_modhint"></div></div>
     <div class="field"><label>Tamanho <span class="req">*</span> <span class="hint" id="p_tamhint" style="font-weight:500">· pode marcar vários para cadastrar a grade de uma vez</span></label>
@@ -3923,18 +3924,41 @@ function modalProduto(pre={}){
   $("#p_nome").addEventListener("change",()=>{ if(existente||$("#p_marca").value.trim()) return;
     const k=$("#p_nome").value.trim().toLowerCase(), m=ESTOQUE.find(x=>x.marca&&chaveModelo(x)===k); if(m) $("#p_marca").value=m.marca; });
 
-  // modelo existente: mostra quais tamanhos já tem e puxa descrição, categoria, marca e preço (se ainda vazios)
-  $("#p_modelo").addEventListener("input",()=>{ if(existente) return;
-    const m=normModelo($("#p_modelo").value), irmaos=m?ESTOQUE.filter(x=>modeloDe(x)===m):[];
-    $("#p_modhint").innerHTML=irmaos.length?`Modelo existente: <b>${esc(irmaos[0].nome)}</b> — já tem ${[...new Set(irmaos.map(x=>`${x.tam}${x.cor?` (${x.cor})`:""}`))].map(esc).join(", ")}`:(m?"Modelo novo.":"");
-    if(!irmaos.length) return; const r=irmaos[0];
-    if(!$("#p_nome").value.trim()) $("#p_nome").value=r.nome;
+  // peça já cadastrada: puxa descrição, cor, categoria, marca, fornecedor, custo e preço (só nos campos vazios)
+  const puxa=r=>{
+    if(!$("#p_nome").value.trim()) $("#p_nome").value=r.nome||"";
     if(!$("#p_marca").value.trim()) $("#p_marca").value=r.marca||"";
     if(!$("#p_cor").value.trim()) $("#p_cor").value=r.cor||"";
+    if(!$("#p_forn").value.trim()&&fornDe(r)&&fornDe(r)!=="—") $("#p_forn").value=fornDe(r);
     if(CATEGORIAS.includes(r.cat)) $("#p_cat").value=r.cat;
+    if(ADM()&&!parseNum(pCusto.value)&&r.custo) pCusto.value=(+r.custo).toFixed(2).replace(".",",");
     if(!parseNum(pPreco.value)&&r.preco){ pPreco.value=(+r.preco).toFixed(2).replace(".",","); pFromPreco(); }
+    if(r.min!=null) $("#p_min").value=r.min;
+  };
+  const tamsTxt=ir=>[...new Set(ir.slice().sort((a,b)=>ordTam(String(a.tam),String(b.tam))).map(x=>`${x.tam}${x.cor?` (${x.cor})`:""}`))].map(esc).join(", ");
+  // modelo existente: mostra quais tamanhos já tem e puxa os dados
+  $("#p_modelo").addEventListener("input",()=>{ if(existente) return;
+    const m=normModelo($("#p_modelo").value), irmaos=m?ESTOQUE.filter(x=>modeloDe(x)===m):[];
+    $("#p_modhint").innerHTML=irmaos.length?`Modelo existente: <b>${esc(irmaos[0].nome)}</b> — já tem ${tamsTxt(irmaos)}`:(m?"Modelo novo.":"");
+    if(!irmaos.length) return;
+    puxa(irmaos[0]);
     if(!skuManual) sku.value=m; // o código final vira MODELO-TAMANHO
   });
+  // código digitado: igual a uma peça → vira reposição; igual ao código base de uma grade → puxa os dados e liga ao modelo
+  const checaSku=()=>{ if(existente) return;
+    const v=sku.value.trim().toUpperCase(); if(!v) return;
+    const exato=ESTOQUE.find(x=>String(x.sku).toUpperCase()===v);
+    if(exato){ modoEntrada(exato); return; }
+    const ir=ESTOQUE.filter(x=>modeloDe(x)===v||(!modeloDe(x)&&skuBaseDe(x.sku,x.tam)===v));
+    if(!ir.length){ if($("#p_modhint").dataset.sku){ $("#p_modhint").innerHTML=""; delete $("#p_modhint").dataset.sku; } return; }
+    puxa(ir[0]);
+    if(ir.some(x=>modeloDe(x)===v)) $("#p_modelo").value=v; // cadastro antigo sem modelo: liga pela descrição + cor puxadas
+    $("#p_modhint").dataset.sku=v;
+    $("#p_modhint").innerHTML=`Código já usado por <b>${esc(ir[0].nome)}</b> — já tem ${tamsTxt(ir)}. Marque o(s) tamanho(s) novo(s): o código vira <b>${esc(v)}-TAMANHO</b>.`;
+  };
+  sku.addEventListener("change",checaSku);
+  let tSku=0; sku.addEventListener("input",()=>{ clearTimeout(tSku); tSku=setTimeout(checaSku,600); }); // preenche ao parar de digitar
+  sku.addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); checaSku(); } });
   // campos de identificação: travados quando é reposição
   const identIds=["p_nome","p_sku","p_cat","p_newcat","p_cor","p_tam","p_marca","p_modelo"];
   const travar=on=>{identIds.forEach(id=>{$("#"+id).disabled=on;}); sizes.querySelectorAll("button").forEach(b=>b.disabled=on);
@@ -4035,7 +4059,10 @@ function modalProduto(pre={}){
       cat:$("#p_cat").value, cor:$("#p_cor").value.trim(), tam:ts[0]||"", marca:$("#p_marca").value.trim(),
       custo:custoIn||0, preco, qtd:Math.max(0,qtd||0), min, forn:forn!=="—"?forn:""};
     const mDig=normModelo($("#p_modelo").value);
-    if(!skuManual&&mDig&&d.tam&&ESTOQUE.some(x=>modeloDe(x)===mDig)){ const s=`${mDig}-${String(d.tam).toUpperCase().replace(/\s+/g,"")}`; if(!ESTOQUE.some(x=>x.sku===s)) d.sku=s; }
+    // tamanho novo de uma peça já cadastrada (modelo escolhido ou código base digitado): código vira BASE-TAMANHO
+    const baseUsada=b=>b&&ESTOQUE.some(x=>modeloDe(x)===b||(!modeloDe(x)&&skuBaseDe(x.sku,x.tam)===b));
+    const bNova=!skuManual&&mDig&&ESTOQUE.some(x=>modeloDe(x)===mDig)?mDig:(baseUsada(d.sku)?d.sku:"");
+    if(bNova&&d.tam){ const s=`${bNova}-${String(d.tam).toUpperCase().replace(/\s+/g,"")}`; if(!ESTOQUE.some(x=>x.sku===s)) d.sku=s; }
     d.modelo=modeloPadrao($("#p_modelo").value,d.nome,d.cor,skuBaseDe(d.sku,d.tam));
     if(d.ean&&!/^\d{6,14}$/.test(d.ean)) return err("Código de barras deve ter só números (6 a 14 dígitos).");
     if(!d.nome) return err("Informe a descrição do produto.");
