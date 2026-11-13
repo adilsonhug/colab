@@ -2058,7 +2058,7 @@ function viewPDV(){
     split=[{pay:p,valor:0},{pay:PAGS_SPLIT.find(x=>x!==p)||"Dinheiro",valor:0}]; drawSplit(); $("#v_split [data-sv]")?.focus(); });
   drawCli();
   $("#v_abrecx")?.addEventListener("click",()=>modalAbrirCaixa(()=>$("#v_cxbar")?.remove()));
-  $("#v_clear").addEventListener("click",()=>{PDV.cart=[];PDV.ultima=null;viewPDV();});
+  $("#v_clear").addEventListener("click",()=>{PDV.cart=[];PDV.ultima=null;PDV.pref=null;viewPDV();}); // limpar também solta o pedido do site
   $("#v_ver")?.addEventListener("click",()=>{current="vendas";renderNav();route();});
   $("#v_wa")?.addEventListener("click",()=>abrirAgradecimento(PDV.ultima));
   if(PDV.pref&&PDV.pref.pay) $("#v_pay").value=PDV.pref.pay; // veio do retorno de funcionário: já em desconto em folha
@@ -2149,7 +2149,12 @@ function viewPDV(){
         valor:fin.ganho,saldo:fin.ganho,base:+Math.max(0,valor-fr).toFixed(2),validade:somaDiasISO(dataISO,CONFIG.cashDias)});
     }
     // primeiro publica o estoque já baixado, depois libera a reserva — assim a peça não reaparece no site no meio do caminho
-    const ped=PDV.pref&&PDV.pref.pedido; if(ped){ v.pedidoSite=ped; const pe=(LOJA_PED||[]).find(x=>x.id===ped); if(pe) pe.status="vendido";
+    // só marca o pedido do site como vendido se as peças dele estão nesta venda (evita marcar pedido errado quando trocaram o carrinho)
+    const pedSkus=PDV.pref&&PDV.pref.pedSkus, pedOk=!pedSkus||pedSkus.every(sk=>cart.some(i=>i.p.sku===sk));
+    const ped=PDV.pref&&PDV.pref.pedido&&pedOk?PDV.pref.pedido:null;
+    const pedSolto=PDV.pref&&PDV.pref.pedido&&!ped?PDV.pref.pedido:null;
+    if(pedSolto) setTimeout(()=>toast(`O pedido #${pedSolto} do site NÃO foi marcado como vendido: as peças dele não estavam nesta venda.`),2500);
+    if(ped){ v.pedidoSite=ped; const pe=(LOJA_PED||[]).find(x=>x.id===ped); if(pe) pe.status="vendido";
       Promise.resolve(lojaPublicar(true)).catch(()=>{}).finally(()=>lojaPedidoStatus(ped,"vendido",true)); }
     VENDAS.push(v); somaFaturamento(dataISO,valor,tipo,fr);
     PDV={cart:[],ultima:v}; viewPDV(); toast(`Venda de ${brl(valor)} registrada.${fin.ganho?` Cliente ganhou ${brl(fin.ganho)} de cashback.`:" Estoque baixado."}`);
@@ -3012,7 +3017,7 @@ function lojaPedidoVenda(p){
   if(!itens.length) return toast("Nenhuma peça deste pedido está no estoque.");
   if(PDV.cart.length&&!confirm("A Nova venda já tem peças. Trocar pelas peças deste pedido?")) return;
   PDV.cart=itens; PDV.ultima=null;
-  PDV.pref={tel:telNum(d.tel||""),nome:d.nome||"",pedido:p.id,frete:d.entrega==="entregar"?+d.taxa||0:0,...(d.atendente?{vend:d.atendente}:{})};
+  PDV.pref={tel:telNum(d.tel||""),nome:d.nome||"",pedido:p.id,pedSkus:itens.map(i=>i.p.sku),frete:d.entrega==="entregar"?+d.taxa||0:0,...(d.atendente?{vend:d.atendente}:{})};
   current="pdv"; renderNav(); route();
   toast(faltam.length?`Atenção: ${faltam.join("; ")}.`:`Pedido #${p.id} na Nova venda. Confira e finalize.`);
 }
