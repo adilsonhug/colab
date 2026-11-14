@@ -4,14 +4,14 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>COLAB Clothing — Loja</title>
 <meta name="description" content="Peças da COLAB Clothing com estoque atualizado. Escolha, monte sua sacola e envie o pedido pelo WhatsApp.">
-<meta name="theme-color" content="#ffffff">
+<meta name="theme-color" content="#0f0f0f">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@200;300;400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 <style>
 :root{
-  --bg:#fff; --surface:#fff; --surface-2:#f3f3f1; --fg:#111; --muted:#7a7a7a; --border:#e5e5e5;
-  --accent:#e0242b; --accent-ink:#fff; --good:#1f9d63; --crit:#d64545;
+  --bg:#f4f2ee; --surface:#fff; --surface-2:#e9e6e0; --fg:#141414; --muted:#77736c; --border:#dedad3;
+  --accent:#141414; --accent-ink:#f4f2ee; --ink:#0f0f0f; --prata:#c9c9c9; --good:#1f9d63; --crit:#d64545;
   --shadow:0 1px 2px rgba(0,0,0,.04),0 10px 30px rgba(0,0,0,.08);
   --font-display:"Montserrat",system-ui,-apple-system,"Segoe UI",sans-serif;
   --font-body:"Montserrat",system-ui,-apple-system,"Segoe UI",sans-serif;
@@ -26,34 +26,42 @@ img{max-width:100%;display:block}
 .wrap{max-width:1180px;margin:0 auto;padding:0 16px}
 
 /* faixa de aviso + topo */
-.anuncio{background:#111;color:#fff;text-align:center;font-size:12px;font-weight:600;letter-spacing:.04em;padding:8px 12px}
-header{position:sticky;top:0;z-index:20;background:#fff;color:var(--fg);border-bottom:1px solid var(--border);padding-top:env(safe-area-inset-top,0)}
-.bar{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:16px;height:84px}
-.wordmark{display:flex;flex-direction:column;align-items:center;line-height:1;background:#0b0b0b;color:#fff;border-radius:10px;padding:9px 12px 8px;text-decoration:none;justify-self:center}
-.wordmark span{font-family:"Arial Black","Archivo Black",sans-serif;font-weight:900;font-size:22px;letter-spacing:.02em}
-.wordmark span i{font-style:normal;color:#e0242b}
-.wordmark small{font-family:Arial,sans-serif;font-size:7.5px;letter-spacing:.42em;margin-top:4px;padding-left:.42em}
+.anuncio{background:#1c1c1c;color:#d9d6d0;text-align:center;font-size:12px;font-weight:600;letter-spacing:.04em;padding:8px 12px}
+header{position:sticky;top:0;z-index:20;background:var(--ink);color:#f4f2ee;border-bottom:1px solid #222;padding-top:env(safe-area-inset-top,0)}
+.bar{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:16px;height:96px}
+/* logo ₡OLAB. (redesenhada em código): C cortado por duas linhas, letras finas e espaçadas, prata */
+.logo{display:inline-flex;flex-direction:column;align-items:center;text-decoration:none;justify-self:center;line-height:1;color:#e9e9e9}
+.logo .lw{display:flex;align-items:flex-end;font-family:"Montserrat",sans-serif;font-weight:400;font-size:34px;letter-spacing:.06em;
+  background:linear-gradient(180deg,#ffffff 0%,#d6d6d6 45%,#9c9c9c 100%);-webkit-background-clip:text;background-clip:text;color:transparent}
+.logo .lc{position:relative;display:inline-block;font-size:1.32em;line-height:.8;margin-right:-.04em}
+.logo .lc::before,.logo .lc::after{content:"";position:absolute;top:-14%;height:128%;width:.045em;min-width:1.5px;
+  background:linear-gradient(180deg,#fff,#a8a8a8);transform:rotate(24deg);transform-origin:center;border-radius:1px}
+.logo .lc::before{left:43%}.logo .lc::after{left:57%}
+.logo .lt{font-family:"Montserrat",sans-serif;font-weight:400;font-size:7.5px;letter-spacing:.5em;margin-top:10px;padding-left:.5em;color:#a9a6a0;white-space:nowrap}
+.logo.esc .lw{background:linear-gradient(180deg,#3a3a3a,#0f0f0f);-webkit-background-clip:text;background-clip:text}
+.logo.esc .lc::before,.logo.esc .lc::after{background:#1a1a1a}
+.logo.esc .lt{color:var(--muted)}
 .busca{position:relative;max-width:300px;width:100%}
-.busca input{width:100%;height:40px;border-radius:2px;border:1px solid #cfcfcf;background:#fff;color:var(--fg);padding:0 38px 0 12px;font-size:13px}
-.busca input:focus{outline:none;border-color:var(--fg)}
-.busca input::placeholder{color:#8a8a8a}
-.busca svg{position:absolute;right:11px;top:11px;width:18px;height:18px;stroke:var(--fg)}
-.sacolaBtn{justify-self:end;position:relative;height:40px;border:0;background:none;color:var(--fg);font-weight:500;font-size:13px;display:flex;align-items:center;gap:7px;padding:0 4px;cursor:pointer}
-.sacolaBtn svg{width:22px;height:22px;stroke:var(--fg)}
+.busca input{width:100%;height:40px;border-radius:2px;border:1px solid #333;background:#181818;color:#f4f2ee;padding:0 38px 0 12px;font-size:13px}
+.busca input:focus{outline:none;border-color:#9c9c9c}
+.busca input::placeholder{color:#8d8a85}
+.busca svg{position:absolute;right:11px;top:11px;width:18px;height:18px;stroke:#c9c9c9}
+.sacolaBtn{justify-self:end;position:relative;height:40px;border:0;background:none;color:#f4f2ee;font-weight:500;font-size:13px;display:flex;align-items:center;gap:7px;padding:0 4px;cursor:pointer}
+.sacolaBtn svg{width:22px;height:22px;stroke:#f4f2ee}
 .sacolaBtn b{font-weight:600}
 .menu{display:flex;justify-content:center;flex-wrap:wrap;gap:4px 26px;padding:0 16px 12px;max-width:1180px;margin:0 auto}
-.menu button{border:0;background:none;padding:6px 0;font-size:12.5px;font-weight:500;letter-spacing:.06em;text-transform:uppercase;cursor:pointer;color:var(--fg);border-bottom:2px solid transparent}
-.menu button:hover{border-bottom-color:#cfcfcf}
-.menu button.on{border-bottom-color:var(--fg);font-weight:700}
+.menu button{border:0;background:none;padding:6px 0;font-size:12px;font-weight:400;letter-spacing:.16em;text-transform:uppercase;cursor:pointer;color:#bdbab4;border-bottom:1px solid transparent}
+.menu button:hover{color:#fff}
+.menu button.on{color:#fff;border-bottom-color:#c9c9c9;font-weight:500}
 @media (max-width:719px){
   .bar{grid-template-columns:1fr auto;grid-template-areas:"logo sac" "busca busca";height:auto;padding-top:10px;padding-bottom:10px;gap:10px}
-  .wordmark{grid-area:logo;justify-self:start}.sacolaBtn{grid-area:sac}.busca{grid-area:busca;max-width:none}
+  .logo{grid-area:logo;justify-self:start}.logo .lw{font-size:27px}.sacolaBtn{grid-area:sac}.busca{grid-area:busca;max-width:none}
   .sacolaBtn .txt{display:none}
   .menu{justify-content:flex-start;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;gap:22px}
   .menu::-webkit-scrollbar{display:none}.menu button{flex:none}
 }
 .hero{padding:34px 0 4px;text-align:center}
-.hero h1{font-family:var(--font-display);font-size:clamp(17px,2.4vw,21px);font-weight:700;margin:0;letter-spacing:.06em;text-transform:uppercase}
+.hero h1{font-family:var(--font-display);font-size:clamp(16px,2.2vw,20px);font-weight:400;margin:0;letter-spacing:.22em;text-transform:uppercase}
 .hero p{margin:8px auto 0;color:var(--muted);max-width:640px;font-size:13px}
 .hero .ig{display:inline-flex;gap:6px;align-items:center;margin-top:6px;color:var(--fg);font-weight:600;text-decoration:none;font-size:13px}
 .filtros{display:flex;gap:10px;align-items:center;justify-content:space-between;padding:18px 0 14px}
@@ -69,8 +77,8 @@ header{position:sticky;top:0;z-index:20;background:#fff;color:var(--fg);border-b
 .foto img{width:100%;height:100%;object-fit:cover;opacity:0;transition:opacity .25s,transform .5s}
 .foto img.carregou{opacity:1}
 .card:hover .foto img.carregou{transform:scale(1.04)}
-.foto .sem{font-family:"Arial Black",sans-serif;font-weight:900;font-size:22px;letter-spacing:.04em;color:#d9d9d9}
-.tag{position:absolute;left:10px;top:10px;background:#111;color:#fff;font-size:10.5px;font-weight:700;padding:4px 8px;border-radius:2px;letter-spacing:.06em;text-transform:uppercase}
+.foto .sem{font-weight:200;font-size:22px;letter-spacing:.2em;color:#c4c0b8}
+.tag{position:absolute;left:10px;top:10px;background:var(--ink);color:#f4f2ee;font-size:10.5px;font-weight:700;padding:4px 8px;border-radius:2px;letter-spacing:.06em;text-transform:uppercase}
 .card .info{padding:12px 4px 0;display:flex;flex-direction:column;gap:3px;align-items:center}
 .card .nome{font-weight:500;font-size:12.5px;letter-spacing:.04em;text-transform:uppercase;line-height:1.35;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .card .cor{color:var(--muted);font-size:11.5px}
@@ -90,13 +98,14 @@ header{position:sticky;top:0;z-index:20;background:#fff;color:var(--fg);border-b
 @media (min-width:720px){.pgal.multi{grid-template-columns:78px minmax(0,1fr)}}
 .pinfo{display:flex;flex-direction:column;gap:16px;min-width:0}
 @media (min-width:860px){.pinfo{position:sticky;top:150px;align-self:start}}
-.pinfo h1{font-size:21px;font-weight:700;letter-spacing:.03em;text-transform:uppercase;margin:0;line-height:1.25}
+.pinfo h1{font-size:20px;font-weight:500;letter-spacing:.08em;text-transform:uppercase;margin:0;line-height:1.25}
 .pinfo .pcor{color:var(--muted);font-size:13px;margin-top:4px}
 .pinfo .pr{font-size:24px;font-weight:700}
 .pinfo #pref{font-size:11.5px;color:var(--muted);margin-top:-12px}
 .linha{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
 .linha>.lbl{min-width:44px}
-.btn.comprar{border-radius:2px;letter-spacing:.14em;text-transform:uppercase;font-weight:700;padding:16px;font-size:14px}
+.btn.comprar:hover:not(:disabled){background:#2c2c2c}
+.btn.comprar{border-radius:2px;letter-spacing:.22em;text-transform:uppercase;font-weight:600;padding:16px;font-size:14px}
 .acc{border-top:1px solid var(--border)}
 .acc details{border-bottom:1px solid var(--border)}
 .acc summary{list-style:none;cursor:pointer;padding:15px 2px;font-size:12px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;display:flex;justify-content:space-between;align-items:center}
@@ -105,7 +114,7 @@ header{position:sticky;top:0;z-index:20;background:#fff;color:var(--fg);border-b
 .acc details[open] summary::after{transform:rotate(-135deg);margin-top:4px}
 .acc .accb{padding:0 2px 16px;font-size:13px;color:#444;white-space:pre-line}
 .mais{padding:10px 0 40px}
-.mais h2{text-align:center;font-size:16px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;margin:10px 0 22px}
+.mais h2{text-align:center;font-size:15px;font-weight:400;letter-spacing:.22em;text-transform:uppercase;margin:10px 0 22px}
 
 /* painéis */
 .veu{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:40;display:flex;align-items:flex-end;justify-content:center}
@@ -137,7 +146,7 @@ header{position:sticky;top:0;z-index:20;background:#fff;color:var(--fg);border-b
 .qtd span{min-width:36px;text-align:center;font-weight:700}
 .btn{border:0;border-radius:4px;padding:14px 18px;font-weight:800;font-size:15px;cursor:pointer;background:var(--accent);color:var(--accent-ink);width:100%}
 .btn:disabled{opacity:.5;cursor:not-allowed}
-.btn.esc{background:#0b0b0b;color:#fff}
+.btn.esc{background:var(--ink);color:#f4f2ee}
 .btn.lin{background:transparent;color:var(--fg);border:1px solid var(--border)}
 .btn.wa{background:#1f9d63}
 .desc{color:var(--muted);font-size:14px;white-space:pre-line}
@@ -169,9 +178,9 @@ header{position:sticky;top:0;z-index:20;background:#fff;color:var(--fg);border-b
 .nota{font-size:12px;color:var(--muted);text-align:center}
 .ok{padding:34px 20px;text-align:center;display:flex;flex-direction:column;gap:12px;align-items:center}
 .ok .bola{width:64px;height:64px;border-radius:999px;background:var(--good);color:#fff;display:grid;place-items:center;font-size:30px}
-.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#0b0b0b;color:#fff;padding:10px 16px;border-radius:999px;font-size:14px;font-weight:600;z-index:60;box-shadow:var(--shadow);max-width:calc(100% - 32px);text-align:center}
-footer{border-top:1px solid var(--border);padding:22px 0 calc(28px + env(safe-area-inset-bottom,0));color:var(--muted);font-size:13px}
-footer .wrap{display:flex;flex-wrap:wrap;gap:8px 20px;justify-content:space-between}
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--ink);color:#fff;padding:10px 16px;border-radius:999px;font-size:14px;font-weight:600;z-index:60;box-shadow:var(--shadow);max-width:calc(100% - 32px);text-align:center}
+footer{background:var(--ink);color:#a9a6a0;padding:34px 0 calc(34px + env(safe-area-inset-bottom,0));font-size:12.5px;letter-spacing:.04em}
+footer .wrap{display:flex;flex-wrap:wrap;gap:14px 20px;justify-content:space-between;align-items:center}
 footer a{color:inherit}
 /* galeria do produto */
 .gal{position:relative;background:var(--surface-2);min-width:0}
@@ -216,7 +225,7 @@ footer a{color:inherit}
 <header><div class="wrap bar">
   <div class="busca"><input id="q" type="search" placeholder="O que você está buscando?" autocomplete="off" aria-label="Buscar">
     <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg></div>
-  <a class="wordmark" href="#" id="logo" aria-label="COLAB Clothing — início"><span>COLAB<i>.</i></span><small>CLOTHING</small></a>
+  <a class="logo" href="#" id="logo" aria-label="COLAB — início"><span class="lw"><span class="lc">C</span>OLAB.</span><span class="lt">ROUPAS QUE MOVEM VOCÊ</span></a>
   <button class="sacolaBtn" id="abreSacola" aria-label="Abrir sacola"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6 7h12l1 14H5z"/><path d="M9 7a3 3 0 0 1 6 0"/></svg><span class="txt">Sacola</span> (<b id="nSacola">0</b>)</button>
 </div><nav class="menu" id="menu" aria-label="Categorias"></nav></header>
 
@@ -226,7 +235,7 @@ footer a{color:inherit}
   <div id="vitrine"><div class="carreg"><div></div><div></div><div></div><div></div></div></div>
 </main>
 <main class="wrap" id="pagina" hidden></main>
-<footer><div class="wrap"><span>COLAB Clothing · Chapecó</span><span id="rodape"></span></div></footer>
+<footer><div class="wrap"><span class="logo" style="justify-self:start;align-items:flex-start"><span class="lw" style="font-size:22px"><span class="lc">C</span>OLAB.</span><span class="lt" style="padding-left:0">ESTILO · ATITUDE · PRESENÇA</span></span><span>Chapecó · SC</span><span id="rodape"></span></div></footer>
 <div id="host"></div>
 
 <script>
@@ -276,7 +285,7 @@ function agenda(refs){ fila.push(...refs); clearTimeout(filaT); filaT=setTimeout
 function observaFotos(raiz){ const imgs=[...(raiz||document).querySelectorAll("img[data-f]")];
   if(!obs){ buscaFotos(imgs.map(i=>i.dataset.f)).then(()=>pintaFotos()); return; }
   imgs.forEach(i=>{ if(FOTOS[i.dataset.f]) pintaFotos(i.parentNode); else obs.observe(i); }); }
-const fotoHTML=(p,tag)=>`<div class="foto">${p.foto?`<img data-f="${esc(p.foto)}" alt="${esc(p.nome)} ${esc(p.cor||"")}" loading="lazy">`:`<span class="sem">COLAB<i style="color:var(--accent);font-style:normal">.</i></span>`}${tag?`<span class="tag">${tag}</span>`:""}</div>`;
+const fotoHTML=(p,tag)=>`<div class="foto">${p.foto?`<img data-f="${esc(p.foto)}" alt="${esc(p.nome)} ${esc(p.cor||"")}" loading="lazy">`:`<span class="sem">₡OLAB.</span>`}${tag?`<span class="tag">${tag}</span>`:""}</div>`;
 
 /* ---------- vitrine ---------- */
 const q0=()=>semAc(F.q).trim();
