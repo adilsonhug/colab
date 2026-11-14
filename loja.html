@@ -177,6 +177,24 @@ header{position:sticky;top:0;z-index:20;background:var(--ink);color:#f4f2ee;bord
 .tot.g{font-size:18px;color:var(--fg);font-weight:800;font-family:var(--font-display)}
 .err{color:var(--crit);font-size:13px;font-weight:600;min-height:1em}
 .nota{font-size:12px;color:var(--muted);text-align:center}
+/* página do produto mais compacta no celular */
+@media (max-width:719px){
+  .migalha{padding:10px 0 8px;font-size:10.5px}
+  .pp{gap:14px;padding-bottom:24px}
+  .pinfo{gap:10px}
+  .pinfo h1{font-size:16px}
+  .pinfo .pcor{font-size:12px;margin-top:2px}
+  .pinfo .pr{font-size:19px}
+  .pinfo #pref{font-size:10.5px;margin-top:-8px}
+  .linha{gap:8px}.linha>.lbl{min-width:36px;font-size:10.5px}
+  .cores{gap:5px}.cores button{padding:6px 9px;font-size:12px}
+  .tamsel{gap:6px}.tamsel button{min-width:40px;height:36px;font-size:12.5px}
+  .qtd button{width:32px;height:32px;font-size:16px}.qtd span{min-width:30px;font-size:13px}
+  .btn.comprar{padding:13px;font-size:13px}
+  .acc summary{padding:11px 2px;font-size:11px}
+  .acc .accb{font-size:12.5px;padding-bottom:12px}
+  .mais h2{font-size:13px;margin:4px 0 14px}
+}
 /* sacola mais compacta no celular */
 @media (max-width:719px){
   .ph{padding:10px 14px}.ph h2{font-size:16px}.x{width:32px;height:32px;font-size:16px}
