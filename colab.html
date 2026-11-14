@@ -2842,7 +2842,7 @@ function lojaDados(real){
 let LOJA_PUB="", LOJA_ST={ok:null,msg:"",quando:""}, LOJA_TENT=0, LOJA_PED=null, LOJA_PED_ERR="", LOJA_PED_T=0;
 let LOJA_V2=null; // null = ainda não sabe; true = banco tem a reserva (loja-reserva.sql); false = versão antiga
 const semFuncao=e=>/function|não encontr|not find|schema|does not exist/i.test(String(e&&e.message||e));
-const lojaUrl=()=>location.origin+"/loja";
+const lojaUrl=()=>"https://www.usecolab.com.br"; // domínio próprio da loja
 async function lojaPublicar(forca){
   if(!window.DB||!DB.ok()) return;
   const d=lojaDados(true), s=JSON.stringify(d);
