@@ -3216,17 +3216,32 @@ function modalAbrirCaixa(onOk,aviso){
 function modalMovCaixa(tipo){
   const c=caixaAberto(); if(!c) return;
   const s=tipo==="sangria";
+  // sangria: quem tira o dinheiro confirma com a própria senha (fica registrado no nome dele)
+  const ativos=USERS.filter(u=>u.ativo);
   modal(`<h3>${s?"Sangria (tirar dinheiro do caixa)":"Reforço (colocar troco no caixa)"}</h3>
     <div class="field"><label>Valor (R$) <span class="req">*</span></label><input class="inp" id="mv_val" inputmode="decimal" placeholder="0,00" style="font-size:18px"></div>
     <div class="field"><label>Motivo</label><input class="inp" id="mv_mot" placeholder="${s?"Ex.: depósito no banco / pagamento motoboy":"Ex.: troco do cofre"}"></div>
+    ${s?`<div class="field"><label>Quem está tirando <span class="req">*</span></label><select class="inp" id="mv_user">${ativos.map(u=>`<option value="${esc(u.id)}" ${u.id===SESSION.id?"selected":""}>${esc(u.name)}</option>`).join("")}</select></div>
+    <div class="field"><label>Senha de quem está tirando <span class="req">*</span></label><input class="inp" id="mv_pw" type="password" autocomplete="off" placeholder="Senha"></div>`:""}
     <div class="err" id="mv_err"></div>
     <div class="row"><button class="btn ghost" data-close>Cancelar</button><button class="btn" id="mv_ok">Registrar</button></div>`);
-  const go=()=>{ const v=parseNum($("#mv_val").value);
+  let conferindo=false;
+  const go=async()=>{ if(conferindo) return; const v=parseNum($("#mv_val").value);
     if(!(v>0)) return $("#mv_err").textContent="Informe o valor.";
-    c.movs=c.movs||[]; c.movs.push({tipo,valor:+v.toFixed(2),motivo:$("#mv_mot").value.trim(),user:SESSION.name,hora:horaAgora()});
-    closeModal(); viewCaixa(); toast(`${s?"Sangria":"Reforço"} de ${brl(v)} registrada.`); };
+    let quem=SESSION;
+    if(s){
+      quem=USERS.find(u=>u.id===$("#mv_user").value);
+      if(!quem) return $("#mv_err").textContent="Escolha quem está tirando.";
+      if(!$("#mv_pw").value) return $("#mv_err").textContent="Digite a senha.";
+      conferindo=true; $("#mv_ok").disabled=true; $("#mv_err").textContent="Conferindo senha…";
+      try{ if(!(await DB.senhaUsuarioOk(quem.id,$("#mv_pw").value))){ $("#mv_err").textContent=`Senha de ${quem.name} incorreta.`; $("#mv_pw").select(); return; } }
+      catch(e){ $("#mv_err").textContent="Não foi possível conferir a senha: "+e.message; return; }
+      finally{ conferindo=false; if($("#mv_ok")) $("#mv_ok").disabled=false; }
+    }
+    c.movs=c.movs||[]; c.movs.push({tipo,valor:+v.toFixed(2),motivo:$("#mv_mot").value.trim(),user:quem.name,...(s&&quem.id!==SESSION.id?{lancou:SESSION.name}:{}),hora:horaAgora()});
+    closeModal(); viewCaixa(); toast(`${s?"Sangria":"Reforço"} de ${brl(v)} registrada${s?` por ${quem.name}`:""}.`); };
   $("#mv_ok").addEventListener("click",go);
-  ["mv_val","mv_mot"].forEach(id=>$("#"+id).addEventListener("keydown",e=>{if(e.key==="Enter")go();}));
+  ["mv_val","mv_mot","mv_pw"].forEach(id=>$("#"+id)?.addEventListener("keydown",e=>{if(e.key==="Enter")go();}));
   setTimeout(()=>$("#mv_val")?.focus(),50);
 }
 // fechamento: quem não é administrador conta "às cegas" (só vê o esperado depois de informar o que contou)
@@ -4231,6 +4246,7 @@ const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
       status("✓ Conectado — alterações são salvas automaticamente","var(--good)");
     },
     async sair(){ sessApagar(); if(TOKEN) await rpc("logout",{p_token:TOKEN}); TOKEN=null; ready=false; },
+    async senhaUsuarioOk(user,senha){ return !!(await rpc("conferir_senha_usuario",{p_token:TOKEN,p_user:user,p_senha:senha})); },
     async senhaAdminOk(senha){ return !!(await rpc("conferir_senha_admin",{p_token:TOKEN,p_senha:senha})); },
     async definirSenha(user,atual,nova){ await rpc("definir_senha",{p_token:TOKEN,p_user:user,p_atual:atual,p_nova:nova}); },
     // loja virtual (funções do loja-supabase.sql); todas exigem a sessão de login
