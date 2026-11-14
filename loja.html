@@ -61,7 +61,7 @@ header{position:sticky;top:0;z-index:20;background:var(--ink);color:#f4f2ee;bord
   .menu{justify-content:flex-start;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;gap:22px}
   .menu::-webkit-scrollbar{display:none}.menu button{flex:none}
 }
-.hero{padding:34px 0 4px;text-align:center}
+.hero{padding:34px 0 24px;text-align:center}
 .hero h1{font-family:var(--font-display);font-size:clamp(16px,2.2vw,20px);font-weight:400;margin:0;letter-spacing:.22em;text-transform:uppercase}
 .hero p{margin:8px auto 0;color:var(--muted);max-width:640px;font-size:13px}
 .hero .redes{display:flex;justify-content:center;flex-wrap:wrap;gap:6px 18px;margin-top:6px}
@@ -273,7 +273,7 @@ footer a{color:inherit}
 
 <main class="wrap" id="inicio">
   <section class="hero"><h1 id="titulo">Todos os produtos</h1><p id="texto">Escolha o tamanho, monte sua sacola e envie o pedido pelo WhatsApp.</p><div class="redes"><a class="ig" id="ig" hidden target="_blank" rel="noopener"></a><a class="ig wa" id="wa" hidden target="_blank" rel="noopener"></a></div></section>
-  <div class="filtros"><div class="conta" id="conta"></div><div id="filtros"></div></div>
+  <div class="filtros" hidden><div class="conta" id="conta"></div><div id="filtros"></div></div>
   <div id="vitrine"><div class="carreg"><div></div><div></div><div></div><div></div></div></div>
 </main>
 <main class="wrap" id="pagina" hidden></main>
@@ -345,7 +345,7 @@ function render(){
   $("#menu").innerHTML=`<button class="${F.cat?"":"on"}" data-cat="">Todos os produtos</button>${cats.map(c=>`<button class="${F.cat===c?"on":""}" data-cat="${esc(c)}">${esc(c)}</button>`).join("")}`;
   $("#menu").querySelectorAll("[data-cat]").forEach(b=>b.onclick=()=>irCategoria(b.dataset.cat));
   $("#titulo").textContent=F.cat||(q0()?`Busca: ${F.q.trim()}`:"Todos os produtos");
-  $("#filtros").innerHTML=tams.length?`<select id="ftam" aria-label="Tamanho"><option value="">Filtrar por tamanho</option>${tams.map(t=>`<option ${F.tam===t?"selected":""}>${esc(t)}</option>`).join("")}</select>`:"";
+  $("#filtros").innerHTML=""; // filtro de tamanho tirado a pedido da loja
   const ft=$("#ftam"); if(ft) ft.onchange=()=>{ F.tam=ft.value; render(); };
   const q=semAc(F.q).trim();
   const lista=PRODS.filter(p=>(!F.cat||p.cat===F.cat)&&(!F.tam||disp(p).some(t=>t.t===F.tam))&&(!q||q.split(/\s+/).every(w=>semAc(`${p.nome} ${p.cor} ${p.cat}`).includes(w))))
