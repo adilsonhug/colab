@@ -220,6 +220,22 @@ header{position:sticky;top:0;z-index:20;background:var(--ink);color:#f4f2ee;bord
 }
 .ok{padding:34px 20px;text-align:center;display:flex;flex-direction:column;gap:12px;align-items:center}
 .ok .bola{width:64px;height:64px;border-radius:999px;background:var(--good);color:#fff;display:grid;place-items:center;font-size:30px}
+/* aviso "adicionado ao carrinho" (some sozinho em 4 s) */
+.addpop{position:fixed;right:12px;z-index:45;width:min(340px,calc(100% - 24px));background:var(--surface);border:1px solid var(--border);box-shadow:0 12px 34px rgba(0,0,0,.22);padding:12px 12px 12px;animation:popin .2s ease-out}
+@keyframes popin{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:none}}
+.addpop.sai{opacity:0;transform:translateY(-8px);transition:opacity .25s,transform .25s}
+.addpop .ap1{display:grid;grid-template-columns:52px minmax(0,1fr) 24px;gap:10px;align-items:start}
+.addpop .apf{width:52px;height:66px;background:var(--surface-2);overflow:hidden}
+.addpop .apf img{width:100%;height:100%;object-fit:cover}
+.addpop .apn{font-size:12px;font-weight:600;letter-spacing:.03em;text-transform:uppercase;line-height:1.3}
+.addpop .apq{font-size:12.5px;margin-top:3px}
+.addpop .apok{font-size:12.5px;font-weight:700;color:var(--good);margin-top:4px}
+.addpop .apx{border:0;background:none;font-size:18px;line-height:1;cursor:pointer;color:var(--muted);padding:0}
+.addpop .apt{display:flex;justify-content:space-between;font-weight:700;font-size:14px;border-top:1px solid var(--border);margin-top:10px;padding-top:9px}
+.addpop .btn{margin-top:9px;padding:11px;font-size:12.5px;letter-spacing:.16em;text-transform:uppercase;border-radius:2px}
+.jaadd{display:flex;justify-content:space-between;align-items:center;font-size:12.5px;color:var(--muted);margin-top:-4px}
+.jaadd b{color:var(--good)}
+.jaadd button{border:0;background:none;padding:0;font-size:11.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;text-decoration:underline;cursor:pointer;color:var(--fg)}
 .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--ink);color:#fff;padding:10px 16px;border-radius:999px;font-size:14px;font-weight:600;z-index:60;box-shadow:var(--shadow);max-width:calc(100% - 32px);text-align:center}
 footer{background:var(--ink);color:#a9a6a0;padding:34px 0 calc(34px + env(safe-area-inset-bottom,0));font-size:12.5px;letter-spacing:.04em}
 footer .wrap{display:flex;flex-wrap:wrap;gap:14px 20px;justify-content:space-between;align-items:center}
@@ -394,6 +410,7 @@ function abreProduto(id,tamPre,semHist){
         <div class="linha"><span class="lbl">Qtd:</span><div class="qtd"><button data-q="-1" aria-label="Menos">−</button><span id="qn">1</span><button data-q="1" aria-label="Mais">+</button></div></div>
         <div class="err" id="perr"></div>
         <button class="btn comprar" id="add" ${d.length?"":"disabled"}>${d.length?"Comprar":"Esgotado"}</button>
+        <div class="jaadd" id="jaadd" ${SACOLA.some(i=>i.id===p.id)?"":"hidden"}><span><b>✓</b> Você já adicionou este produto.</span><button type="button" data-versac>Ver carrinho</button></div>
         ${!d.length&&LOJA.whats?`<a class="btn lin" style="text-align:center;text-decoration:none;border-radius:2px" target="_blank" rel="noopener" href="https://wa.me/55${esc(LOJA.whats)}?text=${encodeURIComponent(`Olá! Vai chegar ${p.nome} ${p.cor||""}?`)}">Perguntar se vai chegar</a>`:""}
         <div class="acc">
           ${p.desc?`<details open><summary>Descrição</summary><div class="accb">${esc(p.desc)}</div></details>`:""}
@@ -425,7 +442,9 @@ function abreProduto(id,tamPre,semHist){
     if(!lim) return $("#perr").textContent="Você já colocou na sacola todas as peças desse tamanho.";
     const q=Math.min(qtd,lim);
     const ja=SACOLA.find(i=>i.id===p.id&&i.tam===tam); ja?ja.qtd+=q:SACOLA.push({id:p.id,tam,qtd:q,sku:t.sku});
-    salvaSacola(); abreSacola(); toast(q<qtd?`Adicionado ${q} — é o que temos nesse tamanho.`:"Adicionado à sacola."); };
+    salvaSacola(); $("#jaadd").hidden=false; avisaAdicionado(p,tam,q,+t.preco||0);
+    if(q<qtd) toast(`Adicionado ${q} — é o que temos nesse tamanho.`); };
+  pg.querySelector("[data-versac]").onclick=()=>abreSacola();
   pinta(); observaFotos(pg); galeria(fs);
 }
 // galeria: deslizar entre as fotos, lupa ao passar o mouse, toque/clique abre o zoom em tela cheia
@@ -485,6 +504,25 @@ function abreZoom(fs,ini){
   st.addEventListener("pointerup",solta); st.addEventListener("pointercancel",solta);
   st.addEventListener("wheel",e=>{ e.preventDefault(); zoomEm(e.clientX,e.clientY,s*(e.deltaY<0?1.25:1/1.25)); aplica(); },{passive:false});
   mostra(ini);
+}
+
+// aviso que aparece embaixo do topo por 4 segundos depois de clicar em Comprar
+let popT=null;
+function avisaAdicionado(p,tam,q,preco){
+  document.querySelector(".addpop")?.remove(); clearTimeout(popT);
+  const L=linhas().filter(l=>l.ok), n=L.reduce((s,l)=>s+l.i.qtd,0), tot=L.reduce((s,l)=>s+l.preco*l.i.qtd,0);
+  const el=document.createElement("div"); el.className="addpop"; el.setAttribute("role","status");
+  el.style.top=(document.querySelector("header").getBoundingClientRect().bottom+8)+"px";
+  el.innerHTML=`<div class="ap1"><div class="apf">${p.foto?`<img data-f="${esc(p.foto)}" alt="">`:""}</div>
+      <div><div class="apn">${esc(p.nome)} ${esc(p.cor||"")} (${esc(tam)})</div><div class="apq">${q}× ${brl(preco)}</div><div class="apok">Adicionado ao carrinho!</div></div>
+      <button class="apx" aria-label="Fechar">×</button></div>
+    <div class="apt"><span>Total (${n} ${n===1?"produto":"produtos"}):</span><span>${brl(tot)}</span></div>
+    <button class="btn esc">Ver carrinho</button>`;
+  document.body.appendChild(el); pintaFotos(el); if(p.foto&&!FOTOS[p.foto]) buscaFotos([p.foto]).then(()=>pintaFotos(el));
+  const some=()=>{ clearTimeout(popT); el.classList.add("sai"); setTimeout(()=>el.remove(),260); };
+  el.querySelector(".apx").onclick=some;
+  el.querySelector(".btn").onclick=()=>{ el.remove(); clearTimeout(popT); abreSacola(); };
+  popT=setTimeout(some,4000);
 }
 
 /* ---------- sacola ---------- */
