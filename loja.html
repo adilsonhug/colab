@@ -351,7 +351,7 @@ function render(){
   const lista=PRODS.filter(p=>(!F.cat||p.cat===F.cat)&&(!F.tam||disp(p).some(t=>t.t===F.tam))&&(!q||q.split(/\s+/).every(w=>semAc(`${p.nome} ${p.cor} ${p.cat}`).includes(w))))
     .sort((a,b)=>(disp(b).length>0)-(disp(a).length>0));
   const n=lista.filter(p=>disp(p).length).length;
-  $("#conta").textContent=PRODS.length?`${n} peça(s) disponível(is)${lista.length>n?` · ${lista.length-n} esgotada(s)`:""}`:"";
+  $("#conta").textContent=""; // contagem de peças escondida a pedido da loja
   if(!PRODS.length){ $("#vitrine").innerHTML=`<div class="vazio"><b>Loja em preparação</b>Logo as peças aparecem aqui.${LOJA.whats?` Enquanto isso, fale com a gente no <a href="https://wa.me/55${esc(LOJA.whats)}" target="_blank" rel="noopener">WhatsApp</a>.`:""}</div>`; return; }
   if(!lista.length){ $("#vitrine").innerHTML=`<div class="vazio"><b>Nada encontrado</b>Tente outra busca ou tire os filtros.</div>`; return; }
   $("#vitrine").innerHTML=`<div class="grade">${lista.map(cardHTML).join("")}</div>`;
