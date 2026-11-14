@@ -64,7 +64,7 @@ header{position:sticky;top:0;z-index:20;background:#0b0b0b;color:#fff;padding-to
 .card:hover{transform:translateY(-2px);box-shadow:var(--shadow)}
 .foto{aspect-ratio:1/1;background:var(--surface-2);position:relative;overflow:hidden;display:grid;place-items:center;color:var(--muted);font-size:12px}
 .foto img{width:100%;height:100%;object-fit:cover;opacity:0;transition:opacity .25s}
-.foto img.ok{opacity:1}
+.foto img.carregou{opacity:1}
 .foto .sem{font-family:var(--font-display);font-weight:800;font-size:22px;letter-spacing:.04em;color:var(--border)}
 .tag{position:absolute;left:8px;top:8px;background:#0b0b0b;color:#fff;font-size:11px;font-weight:700;padding:4px 8px;border-radius:999px;letter-spacing:.03em}
 .card .info{padding:10px 12px 12px;display:flex;flex-direction:column;gap:2px}
@@ -149,7 +149,7 @@ footer a{color:inherit}
 .galv::-webkit-scrollbar{display:none}
 .gi{flex:0 0 100%;scroll-snap-align:start;overflow:hidden;position:relative;cursor:zoom-in;display:grid;place-items:center}
 .gi img{width:100%;height:100%;object-fit:cover;opacity:0;transition:opacity .25s}
-.gi img.ok{opacity:1}
+.gi img.carregou{opacity:1}
 .gi.zoom img{transition:none}
 .galt{display:flex;gap:6px;padding:8px;justify-content:center}
 .galt button{width:52px;height:52px;border-radius:8px;overflow:hidden;border:2px solid transparent;padding:0;background:var(--surface);cursor:pointer;opacity:.6}
@@ -230,7 +230,7 @@ async function buscaFotos(refs){
 }
 function pintaFotos(raiz){
   (raiz||document).querySelectorAll("img[data-f]").forEach(i=>{ const f=FOTOS[i.dataset.f];
-    if(f&&!i.src){ i.onload=()=>i.classList.add("ok"); i.src=f; } });
+    if(f&&!i.src){ i.onload=()=>i.classList.add("carregou"); i.src=f; } });
 }
 // carrega as fotos só quando o card aparece na tela
 const obs="IntersectionObserver" in window?new IntersectionObserver(ents=>{
