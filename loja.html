@@ -38,7 +38,7 @@ header{position:sticky;top:0;z-index:20;background:var(--ink);color:#f4f2ee;bord
   background:linear-gradient(180deg,#fff,#a8a8a8);transform:rotate(24deg);transform-origin:center;border-radius:1px}
 .logo .lp{color:#e0242b;-webkit-text-fill-color:#e0242b;margin-left:.02em}
 .logo .lc::before{left:43%}.logo .lc::after{left:57%}
-.logo .lt{font-family:"Montserrat",sans-serif;font-weight:400;font-size:7.5px;letter-spacing:.5em;margin-top:10px;padding-left:.5em;color:#a9a6a0;white-space:nowrap}
+.logo .lt{font-family:"Montserrat",sans-serif;font-weight:500;font-size:9px;letter-spacing:.42em;margin-top:9px;padding-left:.5em;color:#a9a6a0;white-space:nowrap}
 .logo.esc .lw{color:#141414;-webkit-text-fill-color:#141414}
 .logo.esc .lc::before,.logo.esc .lc::after{background:#1a1a1a}
 .logo.esc .lt{color:var(--muted)}
@@ -56,7 +56,7 @@ header{position:sticky;top:0;z-index:20;background:var(--ink);color:#f4f2ee;bord
 .menu button.on{color:#fff;border-bottom-color:#c9c9c9;font-weight:500}
 @media (max-width:719px){
   .bar{grid-template-columns:1fr auto;grid-template-areas:"logo sac" "busca busca";height:auto;padding-top:10px;padding-bottom:10px;gap:10px}
-  .logo{grid-area:logo;justify-self:start}.logo .lw{font-size:36px}.sacolaBtn{grid-area:sac}.busca{grid-area:busca;max-width:none}
+  .logo{grid-area:logo;justify-self:start}.logo .lw{font-size:36px}.logo .lt{font-size:7.5px;margin-top:7px}.sacolaBtn{grid-area:sac}.busca{grid-area:busca;max-width:none}
   .sacolaBtn .txt{display:none}
   .menu{justify-content:flex-start;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;gap:22px}
   .menu::-webkit-scrollbar{display:none}.menu button{flex:none}
@@ -267,7 +267,7 @@ footer a{color:inherit}
 <header><div class="wrap bar">
   <div class="busca"><input id="q" type="search" placeholder="O que você está buscando?" autocomplete="off" aria-label="Buscar">
     <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg></div>
-  <a class="logo" href="#" id="logo" aria-label="COLAB — início"><span class="lw"><span class="lc">C</span>OLAB<span class="lp">.</span></span></a>
+  <a class="logo" href="#" id="logo" aria-label="COLAB — início"><span class="lw"><span class="lc">C</span>OLAB<span class="lp">.</span></span><span class="lt">ESTILO · ATITUDE · PRESENÇA</span></a>
   <button class="sacolaBtn" id="abreSacola" aria-label="Abrir sacola"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6 7h12l1 14H5z"/><path d="M9 7a3 3 0 0 1 6 0"/></svg><span class="txt">Sacola</span> (<b id="nSacola">0</b>)</button>
 </div><nav class="menu" id="menu" aria-label="Categorias"></nav></header>
 
