@@ -1598,17 +1598,25 @@ function twoCol(arr,mes=MES_ATUAL.slice(5,7)){
   return rows;
 }
 
-function comissaoDe(u){
-  const base=(COMISSAO.find(c=>c.vend===u.name)?.valor||0)+VENDAS.filter(v=>v.nova&&v.vend===u.name).reduce((s,v)=>s+v.valor,0);
+// comissão por mês: base da planilha vale só para o mês dela (MES_ATUAL); as vendas lançadas contam no mês da venda
+let COM_MES=null;
+function comissaoDe(u,ym=COM_MES||hojeISO().slice(0,7)){
+  const base=(ym===MES_ATUAL?(COMISSAO.find(c=>c.vend===u.name)?.valor||0):0)
+    +VENDAS.filter(v=>v.nova&&v.vend===u.name&&String(v.dataISO||"").startsWith(ym)).reduce((s,v)=>s+v.valor,0);
   return {base,valor:base*(u.com||0)/100};
 }
 function viewComissao(){
   const isAdmin=SESSION.role==="admin";
+  const hoje=hojeISO().slice(0,7); if(!COM_MES) COM_MES=hoje;
+  const meses=[...new Set([hoje,MES_ATUAL,COM_MES,...VENDAS.filter(v=>v.nova&&v.dataISO).map(v=>v.dataISO.slice(0,7))])].sort().reverse();
+  const nomeMes=ym=>`${MESES_L[+ym.slice(5,7)-1]}/${ym.slice(0,4)}`;
   const lista=USERS.filter(u=>isAdmin?(u.ativo||comissaoDe(u).base>0):u.id===SESSION.id);
   const tot=lista.reduce((s,u)=>s+comissaoDe(u).valor,0);
   $("#view").innerHTML=`
   <div class="section">
-    <div class="card"><div class="card-h"><h3>${isAdmin?"Comissão por vendedor — outubro":"Minha comissão — outubro"}</h3><span class="chip good">${brl(tot)}</span></div>
+    <div class="card"><div class="card-h"><h3>${isAdmin?"Comissão por vendedor":"Minha comissão"}</h3>
+        <select class="inp" id="com_mes" style="max-width:180px;margin-left:auto;margin-right:10px">${meses.map(m=>`<option value="${m}" ${m===COM_MES?"selected":""}>${nomeMes(m)}</option>`).join("")}</select>
+        <span class="chip good">${brl(tot)}</span></div>
       <div class="card-b pad0"><div class="tw"><table>
         <thead><tr><th>Vendedor</th><th class="num">Vendas no mês</th><th class="num">% comissão</th><th class="num">Comissão</th></tr></thead>
         <tbody>${lista.map(u=>{const c=comissaoDe(u);return `<tr><td><b>${esc(u.name)}</b><div class="hint">${esc(u.desc)}</div></td>
@@ -1616,8 +1624,9 @@ function viewComissao(){
           <td class="num">${isAdmin?`<input class="inp cnt" type="number" step="0.1" min="0" data-com="${u.id}" value="${u.com||0}" style="width:76px"> %`:`${u.com||0}%`}</td>
           <td class="num tnum" style="font-weight:800">${brl(c.valor)}</td></tr>`;}).join("")}</tbody>
       </table></div></div></div>
-    <div class="hint" style="margin-top:12px">Base = vendas do mês já apuradas na planilha + vendas lançadas no sistema. ${isAdmin?"Altere o % direto na tabela ou no painel de usuários.":""}</div>
+    <div class="hint" style="margin-top:12px">Base = vendas lançadas no sistema no mês escolhido${COM_MES===MES_ATUAL?" + vendas já apuradas na planilha":""}. ${isAdmin?"Altere o % direto na tabela ou no painel de usuários.":""}</div>
   </div>`;
+  $("#com_mes").addEventListener("change",e=>{COM_MES=e.target.value; viewComissao();});
   $("#view").querySelectorAll("[data-com]").forEach(x=>x.addEventListener("change",()=>{
     const u=USERS.find(y=>y.id===x.dataset.com); u.com=Math.max(0,parseFloat(x.value)||0); viewComissao(); toast(`Comissão de ${u.name}: ${u.com}%`);}));
 }
@@ -1651,7 +1660,7 @@ function viewConta(){
   $("#view").querySelectorAll("[data-pw]").forEach(b=>b.addEventListener("click",()=>{const u=USERS.find(x=>x.id===b.dataset.pw);modalSenha(u,u.id===SESSION.id);}));
 }
 function viewMinhaConta(){
-  const c=comissaoDe(SESSION);
+  const c=comissaoDe(SESSION,hojeISO().slice(0,7));
   $("#view").innerHTML=`
   <div class="section" style="max-width:560px">
     <div class="card"><div class="card-b" style="display:flex;align-items:center;gap:14px">
