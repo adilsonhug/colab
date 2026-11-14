@@ -527,7 +527,7 @@ function abreSacola(aviso){
 // frete: grátis a partir do valor mínimo para os estados das regiões marcadas no app
 const UFS=["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"];
 // tabela de frete do app: até "ate" = fixo; acima = % das peças; a partir de "gratis" = grátis (0 = sem frete grátis)
-const FR=()=>LOJA.frete||{regA:["Sul","Sudeste"],ufA:["PR","SC","RS","SP","RJ","MG","ES"],a:{ate:200,fixo:31.9,pct:13,gratis:450},b:{ate:200,fixo:39.9,pct:15,gratis:650}};
+const FR=()=>LOJA.frete||{regA:["Sul","Sudeste"],ufA:["PR","SC","RS","SP","RJ","MG","ES"],a:{ate:200,fixo:31.9,pct:13,gratis:450},b:{ate:200,fixo:39.9,pct:15,gratis:0}};
 const juntaE=l=>l.join(", ").replace(/, ([^,]*)$/," e $1");
 const gratisTxt=()=>{ if(!LOJA.entrega) return ""; const f=FR(), a=+f.a.gratis>0, b=+f.b.gratis>0;
   if(a&&b) return `Frete grátis acima de ${brl(f.a.gratis)} para ${juntaE(f.regA)} e acima de ${brl(f.b.gratis)} para as demais regiões`;

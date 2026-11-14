@@ -2810,7 +2810,7 @@ async function excelClientes(lista){
    O pedido do site chega pelo WhatsApp e fica aqui; "Levar para Nova venda" faz a venda normal (baixa estoque, caixa, cashback). */
 let LOJA={mod:{},cfg:{}};
 // frete: até "ate" = valor fixo; acima disso = % das peças; a partir de "gratis" = grátis. "a" vale para as regiões de regA, "b" para as demais
-const FRETE_PADRAO={regA:["Sul","Sudeste"],a:{ate:200,fixo:31.9,pct:13,gratis:450},b:{ate:200,fixo:39.9,pct:15,gratis:650}};
+const FRETE_PADRAO={regA:["Sul","Sudeste"],a:{ate:200,fixo:31.9,pct:13,gratis:450},b:{ate:200,fixo:39.9,pct:15,gratis:0}};
 const lojaCfg=()=>{ const c=Object.assign({whats:"",insta:"",texto:"",entrega:true,entregaTxt:"",retirada:true,endereco:""},LOJA.cfg||{});
   c.frete=Object.assign({},FRETE_PADRAO,c.frete||{}); return c; };
 const REGIOES={Sul:["PR","SC","RS"],Sudeste:["SP","RJ","MG","ES"],"Centro-Oeste":["DF","GO","MT","MS"],Nordeste:["BA","SE","AL","PE","PB","RN","CE","PI","MA"],Norte:["AM","PA","AC","RO","RR","AP","TO"]};
