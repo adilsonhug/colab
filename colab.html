@@ -2821,7 +2821,7 @@ function lojaModelos(){
   const m={};
   ESTOQUE.forEach(p=>{ if(!p||!p.nome) return; const k=modKey(p); (m[k]=m[k]||{k,nome:p.nome,cor:p.cor,cat:p.cat,itens:[]}).itens.push(p); });
   return Object.values(m).map(x=>{ const c=LOJA.mod[x.k]||{}, fotos=fotosDe(c);
-    return {...x,on:!!c.on,fotos,foto:fotos[0]||"",desc:c.desc||"",preco:Math.min(...x.itens.map(p=>+p.preco||0)),
+    return {...x,on:!!c.on,fotos,foto:fotos[0]||"",desc:c.desc||"",medidas:c.medidas||"",preco:Math.min(...x.itens.map(p=>+p.preco||0)),
       qtd:x.itens.reduce((s,p)=>s+Math.max(0,p.qtd||0),0),tams:ordItensTam(x.itens)}; });
 }
 // fotos do modelo: lista (a 1ª é a principal); "foto" é do formato antigo, de uma foto só
@@ -2834,7 +2834,7 @@ function lojaDados(real){
   const prods=lojaModelos().filter(x=>x.on).map(x=>{ const t={};
     x.tams.forEach(p=>{ const k=String(p.tam); if(!t[k]) t[k]={t:k,ok:false,n:0,sku:p.sku,ean:p.ean||"",preco:+p.preco||0};
       if(p.qtd>0&&!t[k].ok) Object.assign(t[k],{ok:true,n:real?p.qtd:Math.min(LOJA_MAXQTD,p.qtd),sku:p.sku,ean:p.ean||"",preco:+p.preco||0}); });
-    return {id:x.k,nome:x.nome,cor:x.cor,cat:x.cat,desc:x.desc,foto:x.foto,fotos:x.fotos,preco:x.preco,tams:Object.values(t)}; });
+    return {id:x.k,nome:x.nome,cor:x.cor,cat:x.cat,desc:x.desc,medidas:x.medidas,foto:x.foto,fotos:x.fotos,preco:x.preco,tams:Object.values(t)}; });
   return {loja:{whats:telNum(c.whats),insta:String(c.insta||"").replace(/^@/,""),texto:c.texto,entrega:!!c.entrega,taxa:+c.taxa||0,
     entregaTxt:c.entregaTxt,retirada:!!c.retirada,endereco:c.endereco,
     frete:{...c.frete,ufA:c.frete.regA.flatMap(r=>REGIOES[r]||[])}},prods};
@@ -3082,7 +3082,7 @@ function lojaProdutosHTML(mods){
         <td style="text-align:right;white-space:nowrap">
           ${x.fotos.length?`<button class="btn ghost sm" data-fm="${esc(x.k)}">📷 Fotos (${x.fotos.length})</button>`
             :`<label class="btn ghost sm" style="cursor:pointer">📷 Fotos<input type="file" accept="image/*" multiple data-fk="${esc(x.k)}" hidden></label>`}
-          <button class="btn ghost sm" data-dk="${esc(x.k)}">Texto</button>
+          <button class="btn ghost sm" data-dk="${esc(x.k)}">Texto e medidas</button>
         </td></tr>`).join("")
       :`<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:24px">${mods.length?"Nenhum modelo com esses filtros.":"O estoque está vazio."}</td></tr>`}</tbody>
     </table></div></div></div>
@@ -3099,8 +3099,15 @@ function lojaProdutosHTML(mods){
     const k=b.dataset.dk, x=mods.find(m=>m.k===k);
     modal(`<h3>Texto do produto no site</h3><div class="hint">${esc(x.nome)} · ${esc(x.cor||"")}</div>
       <div class="field"><label>Descrição (opcional)</label><textarea class="inp" id="ld_txt" rows="4" maxlength="400" placeholder="Ex.: Malha 100% algodão, modelagem oversized.">${esc(x.desc)}</textarea></div>
+      <div class="field"><label>Medidas (opcional)</label><textarea class="inp" id="ld_med" rows="6" maxlength="800" placeholder="Ex.:
+O modelo está usando tamanho M.
+Referências do modelo: 1,75 m e 69 kg.
+P: largura 52 cm · comprimento 70 cm
+M: largura 54 cm · comprimento 72 cm
+G: largura 56 cm · comprimento 74 cm">${esc(x.medidas)}</textarea>
+        <div class="hint">Aparece no site, na página do produto, na seção “Medidas”.</div></div>
       <div class="row"><button class="btn ghost" data-close>Cancelar</button><button class="btn" id="ld_ok">Salvar</button></div>`);
-    $("#ld_ok").addEventListener("click",()=>{ LOJA.mod[k]={...(LOJA.mod[k]||{}),desc:$("#ld_txt").value.trim()}; closeModal(); viewLoja(); });
+    $("#ld_ok").addEventListener("click",()=>{ LOJA.mod[k]={...(LOJA.mod[k]||{}),desc:$("#ld_txt").value.trim(),medidas:$("#ld_med").value.trim()}; closeModal(); viewLoja(); });
   }));
   const refs=mostra.map(x=>x.foto).filter(Boolean);
   const pinta=()=>$("#lj_corpo")?.querySelectorAll("img[data-foto]").forEach(i=>{ const f=FOTOS[i.dataset.foto]; if(f&&i.src!==f) i.src=f; });
