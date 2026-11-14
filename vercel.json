@@ -4,5 +4,30 @@
   "installCommand": "",
   "outputDirectory": ".",
   "cleanUrls": true,
-  "rewrites": [{ "source": "/", "destination": "/colab" }]
+  "rewrites": [
+    {
+      "source": "/",
+      "has": [
+        {
+          "type": "host",
+          "value": "usecolab.com.br"
+        }
+      ],
+      "destination": "/loja"
+    },
+    {
+      "source": "/",
+      "has": [
+        {
+          "type": "host",
+          "value": "www.usecolab.com.br"
+        }
+      ],
+      "destination": "/loja"
+    },
+    {
+      "source": "/",
+      "destination": "/colab"
+    }
+  ]
 }
