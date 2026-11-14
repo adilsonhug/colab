@@ -2406,7 +2406,8 @@ function viewTrocas(){
         <td>${esc(d.motivo)}${d.obs?`<div class="hint">${esc(d.obs)}</div>`:""}</td>
         <td>${d.destino==="vale"?`<span class="chip" style="color:#0e8a8a;background:#0e8a8a1f">Vale ${esc(d.cod)}</span><div class="hint">${d.saldo>0.009?`saldo ${brl(d.saldo)}`:"já usado"}</div>`:`<span class="chip crit">Dinheiro devolvido</span>${d.autor?`<div class="hint">aut.: ${esc(d.autor)}</div>`:""}`}</td>
         <td class="num tnum">${brl(d.valor)}</td>
-        <td style="text-align:right">${d.destino==="vale"&&d.saldo>0.009?`<button class="btn sm" data-usar="${d.id}">Usar na venda</button>`:""}</td></tr>`).join("")
+        <td style="text-align:right;white-space:nowrap">${d.destino==="vale"&&d.saldo>0.009?`<button class="btn sm" data-usar="${d.id}">Usar na venda</button>`:""}
+          <button class="btn ghost sm" data-dvexc="${d.id}" title="Excluir devolução (senha do administrador)">Excluir</button></td></tr>`).join("")
         :`<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:24px">${DEVF==="vales"?"Nenhum vale-troca em aberto.":"Nenhuma devolução registrada ainda."}</td></tr>`}</tbody>
     </table></div></div></div>
     <div class="hint" style="margin-top:10px">A devolução aparece na aba Vendas, mas não diminui o faturamento. Na troca, o vale é usado como pagamento na Nova venda e só a diferença paga entra no dia.</div>
@@ -2414,6 +2415,20 @@ function viewTrocas(){
   $("#dv_nova").addEventListener("click",()=>modalNovaDevolucao());
   $("#dv_f").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;DEVF=b.dataset.f;viewTrocas();});
   $("#view").querySelectorAll("[data-usar]").forEach(b=>b.addEventListener("click",()=>usarVale(+b.dataset.usar)));
+  $("#view").querySelectorAll("[data-dvexc]").forEach(b=>b.addEventListener("click",()=>excluirDevolucao(+b.dataset.dvexc)));
+}
+// exclui uma devolução lançada errada: sempre pede a senha do administrador (mesmo logado como admin)
+function excluirDevolucao(id){
+  const d=DEVOLUCOES.find(x=>x.id===id); if(!d) return;
+  const usado=VENDAS.some(v=>v.vale&&v.vale.id===d.id)||(d.destino==="vale"&&d.saldo<d.valor-0.009);
+  if(usado) return toast(`O vale ${d.cod} já foi usado em uma venda. Cancele essa venda antes de excluir a devolução.`);
+  const pecas=d.estoque!==false?" As peças saem do estoque de novo.":"";
+  askAdminPw(()=>{
+    if(!confirm(`Excluir a devolução de ${d.cliente} (${brl(d.valor)})?${pecas}`)) return;
+    if(d.estoque!==false) d.itens.forEach(i=>{ const p=ESTOQUE.find(x=>x.sku===i.sku); if(p) p.qtd=Math.max(0,p.qtd-i.qtd); });
+    DEVOLUCOES=DEVOLUCOES.filter(x=>x!==d); viewTrocas();
+    toast(`Devolução de ${d.cliente} excluída.`);
+  },`Excluir a devolução de ${esc(d.cliente)} (${brl(d.valor)}${d.cod?` · vale ${esc(d.cod)}`:""}). Confirme com a senha do administrador.`);
 }
 // leva o vale para a Nova venda (já selecionado no pagamento)
 function usarVale(id){ const d=DEVOLUCOES.find(x=>x.id===id); PDV.pref={vale:id,tel:d&&d.tel||"",nome:d&&d.cliente||""}; PDV.ultima=null; current="pdv"; renderNav(); route(); toast("Vale-troca selecionado. Bipe as peças novas."); }
