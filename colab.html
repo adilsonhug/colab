@@ -2190,7 +2190,9 @@ function viewPDV(){
 let FOF={sit:"pendente",mes:"",func:""};
 function viewFolha(){
   if(SESSION.role!=="admin"){ current="dash"; return route(); }
-  const todas=VENDAS.filter(v=>v.pay===PAG_FOLHA);
+  // compras (vendas em desconto em folha) + vales/adiantamentos (ficam nas despesas, não são venda)
+  const todas=[...VENDAS.filter(v=>v.pay===PAG_FOLHA).map(v=>({src:v,func:v.func,dataISO:v.dataISO,hora:v.hora,desc:String(v.desc||"").replace(/ — funcionário: .*$/,""),vend:v.vend,valor:v.valor,descontado:v.descontado})),
+    ...DESPESAS.filter(d=>d.adiant).map(d=>({src:d,vale:true,func:d.adiant.func,dataISO:d.data,hora:d.hora||"",desc:"Vale / adiantamento"+(d.adiant.obs?` — ${d.adiant.obs}`:""),vend:d.adiant.por||d.user||"",valor:d.valor,descontado:d.descontado}))];
   const funcDe=v=>v.func||"Não informado";
   const meses=[...new Set(todas.map(v=>String(v.dataISO||"").slice(0,7)).filter(Boolean))].sort().reverse();
   const funcs=[...new Set(todas.map(funcDe))].sort((a,b)=>a.localeCompare(b,"pt-BR"));
@@ -2203,49 +2205,102 @@ function viewFolha(){
   $("#view").innerHTML=`
   <div class="section">
     <div class="tiles compact" style="margin-bottom:14px">
-      <div class="tile"><div class="lbl"><span class="dot" style="background:#7a4cc2"></span>A descontar (total)</div><div class="val tnum">${brl(totPend)}</div><div class="sub">${pend.length} venda(s) · ${new Set(pend.map(funcDe)).size} funcionário(s)</div></div>
-      <div class="tile"><div class="lbl"><span class="dot" style="background:var(--good)"></span>Já descontado</div><div class="val tnum">${brl(todas.filter(v=>v.descontado).reduce((s,v)=>s+v.valor,0))}</div><div class="sub">${todas.filter(v=>v.descontado).length} venda(s)</div></div>
+      <div class="tile"><div class="lbl"><span class="dot" style="background:#7a4cc2"></span>A descontar (total)</div><div class="val tnum">${brl(totPend)}</div><div class="sub">${pend.length} lançamento(s) · ${new Set(pend.map(funcDe)).size} funcionário(s)</div></div>
+      <div class="tile"><div class="lbl"><span class="dot" style="background:var(--good)"></span>Já descontado</div><div class="val tnum">${brl(todas.filter(v=>v.descontado).reduce((s,v)=>s+v.valor,0))}</div><div class="sub">${todas.filter(v=>v.descontado).length} lançamento(s)</div></div>
     </div>
     <div class="toolbar" style="align-items:flex-end;flex-wrap:wrap">
       <div class="sizes" id="fo_sit">${[["pendente","A descontar"],["descontado","Descontadas"],["todas","Todas"]].map(([k,l])=>`<button type="button" data-s="${k}" class="${FOF.sit===k?"on":""}">${l}</button>`).join("")}</div>
       <div class="field" style="min-width:140px"><label>Mês da compra</label>${optSel("fo_mes",meses.map(m=>[m,mesLbl(m)]),FOF.mes,"Todos")}</div>
       <div class="field" style="min-width:150px"><label>Funcionário</label>${optSel("fo_func",funcs,FOF.func,"Todos")}</div>
       <button class="btn ghost" id="fo_print" style="margin-left:auto">${ICO_PRINT}Imprimir</button>
+      <button class="btn" id="fo_vale">+ Vale / adiantamento</button>
     </div>
     ${Object.keys(grupos).length?Object.entries(grupos).map(([f,vs])=>{
       const tot=vs.reduce((s,v)=>s+v.valor,0), pendF=vs.filter(v=>!v.descontado);
       return `<div class="card" style="margin-bottom:14px">
         <div class="card-h"><h3>${esc(f)}</h3><span class="chip" style="color:#7a4cc2;background:#7a4cc222">${brl(tot)}</span>
-          <span class="hint">${vs.length} compra(s)</span>
+          <span class="hint">${vs.length} lançamento(s)</span>
           ${pendF.length?`<button class="btn sm" style="margin-left:auto" data-desc="${esc(f)}">✓ Marcar como descontado (${brl(pendF.reduce((s,v)=>s+v.valor,0))})</button>`:""}</div>
         <div class="card-b pad0"><div class="tw"><table style="min-width:0">
-          <thead><tr><th>Data</th><th>Peças</th><th>Lançada por</th><th class="num">Valor</th><th>Situação</th></tr></thead>
+          <thead><tr><th>Data</th><th>Descrição</th><th>Lançada por</th><th class="num">Valor</th><th>Situação</th><th></th></tr></thead>
           <tbody>${vs.map(v=>`<tr><td class="tnum">${v.dataISO?fmtDate(v.dataISO):"—"}${v.hora?`<div class="hint">${esc(v.hora)}</div>`:""}</td>
-            <td>${esc(String(v.desc||"").replace(/ — funcionário: .*$/,""))}</td><td>${esc(v.vend||"—")}</td>
+            <td>${v.vale?`<span class="chip" style="color:#b45309;background:#b4530922;margin-right:6px">Vale</span>`:`<span class="chip" style="margin-right:6px">Compra</span>`}${esc(v.desc)}</td><td>${esc(v.vend||"—")}</td>
             <td class="num tnum"><b>${brl(v.valor)}</b></td>
-            <td>${v.descontado?`<span class="chip good">Descontado</span><div class="hint">${esc(v.descontado)}</div>`:`<span class="chip warn">A descontar</span>`}</td></tr>`).join("")}</tbody>
+            <td>${v.descontado?`<span class="chip good">Descontado</span><div class="hint">${esc(v.descontado)}</div>`:`<span class="chip warn">A descontar</span>`}</td>
+            <td style="text-align:right">${v.vale?"":`<button class="btn ghost sm" data-conv="${lista.indexOf(v)}" title="Foi um vale/adiantamento lançado como venda">É vale</button>`}</td></tr>`).join("")}</tbody>
         </table></div></div></div>`;}).join("")
-    :`<div class="card"><div class="card-b"><div class="infobox" style="text-align:center;color:var(--muted)">${todas.length?"Nenhuma venda com esses filtros.":"Nenhuma venda para funcionário ainda. Elas são feitas na Nova venda com o pagamento “Desconto em folha”."}</div></div></div>`}
+    :`<div class="card"><div class="card-b"><div class="infobox" style="text-align:center;color:var(--muted)">${todas.length?"Nada com esses filtros.":"Nada para descontar ainda. Compras de funcionário são feitas na Nova venda com o pagamento “Desconto em folha”; vales, no botão “+ Vale / adiantamento”."}</div></div></div>`}
   </div>`;
   $("#fo_sit").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;FOF.sit=b.dataset.s;viewFolha();});
   $("#fo_mes").addEventListener("change",e=>{FOF.mes=e.target.value;viewFolha();});
   $("#fo_func").addEventListener("change",e=>{FOF.func=e.target.value;viewFolha();});
   $("#view").querySelectorAll("[data-desc]").forEach(b=>b.addEventListener("click",()=>{
     const f=b.dataset.desc, alvo=lista.filter(v=>funcDe(v)===f&&!v.descontado), tot=alvo.reduce((s,v)=>s+v.valor,0);
-    askAdminPw(()=>{ const q=`${agoraStr()} · ${SESSION.name}`; alvo.forEach(v=>{v.descontado=q;}); viewFolha();
+    askAdminPw(()=>{ const q=`${agoraStr()} · ${SESSION.name}`; alvo.forEach(v=>{v.src.descontado=q;}); viewFolha();
       toast(`${f}: ${brl(tot)} marcado como descontado.`); },
-      `Marcar ${alvo.length} compra(s) de ${esc(f)} (${brl(tot)}) como descontadas do salário. Confirme com a senha do administrador.`);
+      `Marcar ${alvo.length} lançamento(s) de ${esc(f)} (${brl(tot)}) como descontadas do salário. Confirme com a senha do administrador.`);
   }));
+  $("#fo_vale").addEventListener("click",()=>modalVale());
+  $("#view").querySelectorAll("[data-conv]").forEach(b=>b.addEventListener("click",()=>modalVale(lista[+b.dataset.conv].src)));
   $("#fo_print").addEventListener("click",()=>{
     if(!lista.length) return toast("Nada para imprimir com esses filtros.");
     const filtros=[FOF.sit==="pendente"?"a descontar":FOF.sit==="descontado"?"descontadas":"todas",FOF.mes&&mesLbl(FOF.mes),FOF.func].filter(Boolean).join(" · ");
-    imprimirRelatorio("Desconto em folha — vendas para funcionários",`
+    imprimirRelatorio("Desconto em folha — funcionários",`
       <div class="meta">Emitido em ${agoraStr()} por ${esc(SESSION.name)} · ${esc(filtros)}</div>
       ${Object.entries(grupos).map(([f,vs])=>`<h3 style="margin:14px 0 4px;font-size:13px">${esc(f)} — ${brl(vs.reduce((s,v)=>s+v.valor,0))}</h3>
-        <table><thead><tr><th>Data</th><th>Peças</th><th class="n">Valor</th><th>Situação</th></tr></thead>
-        <tbody>${vs.map(v=>`<tr><td>${v.dataISO?fmtDate(v.dataISO):"—"}</td><td>${esc(String(v.desc||"").replace(/ — funcionário: .*$/,""))}</td><td class="n">${brl(v.valor)}</td><td>${v.descontado?"Descontado":"A descontar"}</td></tr>`).join("")}</tbody>
+        <table><thead><tr><th>Data</th><th>Descrição</th><th class="n">Valor</th><th>Situação</th></tr></thead>
+        <tbody>${vs.map(v=>`<tr><td>${v.dataISO?fmtDate(v.dataISO):"—"}</td><td>${v.vale?"[Vale] ":""}${esc(v.desc)}</td><td class="n">${brl(v.valor)}</td><td>${v.descontado?"Descontado":"A descontar"}</td></tr>`).join("")}</tbody>
         <tfoot><tr><td colspan="2">Total ${esc(f)}</td><td class="n">${brl(vs.reduce((s,v)=>s+v.valor,0))}</td><td></td></tr></tfoot></table>
         <div class="ass"><div>${esc(f)}</div><div>Administrador</div></div>`).join("")}`,"portrait");
+  });
+}
+
+// vale / adiantamento: é despesa (não é venda) e fica na folha para descontar do salário.
+// com "v": converte uma venda em desconto em folha que na verdade foi um adiantamento
+function modalVale(v){
+  const PAYS=["Pix","Dinheiro do caixa","Dinheiro","Transferência"];
+  const funcs=USERS.filter(u=>u.ativo!==false).map(u=>u.name); if(v&&v.func&&!funcs.includes(v.func)) funcs.push(v.func);
+  modal(`<h3>${v?"Converter em vale / adiantamento":"Vale / adiantamento"}</h3>
+    ${v?`<div class="infobox" style="gap:2px"><b>Lançado como venda: ${fmtDate(v.dataISO)} · ${brl(v.valor)} · ${esc(v.func||"")}</b><div class="hint">${esc(String(v.desc||"").replace(/ — funcionário: .*$/,""))}</div><div class="hint">A venda sai do faturamento e da comissão e vira uma despesa (vale). Continua aqui para descontar na folha.</div></div>`
+      :`<div class="hint">Entra nas Despesas e fica aqui para descontar do salário. Não conta como venda.</div>`}
+    <div class="formrow">
+      <div class="field"><label>Funcionário <span class="req">*</span></label><select class="inp" id="va_func" ${v?"disabled":""}><option value="">Selecione…</option>${funcs.map(f=>`<option ${v&&v.func===f?"selected":""}>${esc(f)}</option>`).join("")}</select></div>
+      <div class="field"><label>Data</label><input class="inp" id="va_data" type="date" value="${esc(v?v.dataISO:hojeISO())}" ${v?"disabled":""}></div>
+    </div>
+    <div class="formrow">
+      <div class="field"><label>Como o dinheiro saiu</label><select class="inp" id="va_pay">${PAYS.map(p=>`<option>${p}</option>`).join("")}</select></div>
+      <div class="field"><label>Valor (R$) <span class="req">*</span></label><input class="inp" id="va_val" type="number" step="0.01" min="0" placeholder="0,00" value="${v?v.valor:""}" ${v?"disabled":""}></div>
+    </div>
+    <div class="field"><label>Observação</label><input class="inp" id="va_obs" maxlength="120" placeholder="Ex.: adiantamento do dia 15"></div>
+    <div class="hint" id="va_cxhint" hidden>Sai da gaveta do caixa ${v&&v.cx?"daquele dia":"aberto"} e entra no fechamento.</div>
+    <div class="err" id="va_err"></div>
+    <div class="row"><button class="btn ghost" data-close>Cancelar</button><button class="btn" id="va_ok">🔒 ${v?"Converter em vale":"Lançar vale"}</button></div>`);
+  $("#va_pay").addEventListener("change",()=>{ $("#va_cxhint").hidden=$("#va_pay").value!=="Dinheiro do caixa"; });
+  $("#va_ok").addEventListener("click",()=>{
+    const func=$("#va_func").value, val=parseFloat($("#va_val").value), data=$("#va_data").value, pay=$("#va_pay").value, obs=$("#va_obs").value.trim();
+    if(!func) return $("#va_err").textContent="Escolha o funcionário.";
+    if(isNaN(val)||val<=0) return $("#va_err").textContent="Informe o valor.";
+    if(!data) return $("#va_err").textContent="Informe a data.";
+    let cx=null;
+    if(pay==="Dinheiro do caixa"){
+      cx=v&&v.cx?CAIXAS.find(c=>c.id===v.cx):(data===hojeISO()?caixaAberto():null);
+      if(!cx) return $("#va_err").textContent=v?"Essa venda não estava em um caixa. Escolha outra forma (ex.: Dinheiro).":"Para tirar do caixa, a data tem que ser hoje e o caixa tem que estar aberto.";
+    }
+    askAdminPw(()=>{
+      if(v){
+        const k=VENDAS.indexOf(v); if(k<0) return toast("Esta venda não está mais na lista.");
+        (v.itens||[]).forEach(i=>{ const p=ESTOQUE.find(x=>x.sku===i.sku); if(p) p.qtd+=i.qtd; });
+        somaFaturamento(v.dataISO,-v.valor,v.tipo,-(v.frete||0));
+        VENDAS.splice(k,1); if(PDV.ultima===v) PDV.ultima=null;
+        CANCELADAS.push({...v,cancelada:{data:hojeISO(),hora:horaAgora(),user:SESSION.name,motivo:"Era vale/adiantamento, não venda: virou despesa"}});
+      }
+      const d={id:DESPESAS.reduce((m,x)=>Math.max(m,+x.id||0),0)+1,data:cx?(v?v.dataISO:hojeISO()):data,forn:"Vale / adiantamento",
+        desc:`${func}${obs?" — "+obs:""}`,pay,valor:+val.toFixed(2),adiant:{func,por:v?(v.vend||SESSION.name):SESSION.name,...(obs?{obs}:{})},
+        ...(v&&v.descontado?{descontado:v.descontado}:{}),
+        ...(cx?{cx:cx.id,hora:(v&&v.hora)||horaAgora(),user:SESSION.name}:{})};
+      DESPESAS.unshift(d); closeModal(); viewFolha();
+      toast(v?`Convertido: ${brl(d.valor)} de ${func} agora é vale (despesa), não venda.`:`Vale de ${brl(d.valor)} para ${func} lançado nas despesas.`);
+    },`${v?"Converter em vale":"Lançar vale"} de ${brl(val)} para ${esc(func)}. Confirme com a senha do administrador.`);
   });
 }
 
@@ -3859,6 +3914,7 @@ function modalDespesa(ed){
       if(cxPay()&&ed.cx) Object.assign(d,{data:ed.data,cx:ed.cx,hora:ed.hora,user:ed.user});
       else if(cxPay()){ const c=caixaAberto(); if(!c) return toast("Abra o caixa para lançar como dinheiro do caixa.");
         Object.assign(d,{data:hojeISO(),cx:c.id,hora:horaAgora(),user:SESSION.name}); }
+      if(ed.adiant) d.adiant=ed.adiant; if(ed.descontado) d.descontado=ed.descontado;
       const k=DESPESAS.indexOf(ed); if(k>=0) DESPESAS[k]=d; else DESPESAS.unshift(d);
       closeModal(); viewDespesas(); toast("Despesa alterada."); return;
     }
