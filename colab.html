@@ -3121,7 +3121,7 @@ function modalLojaCfg(){
             <div class="field"><label>Compras até (R$)</label><input class="inp" data-fr="${g}.ate" inputmode="decimal" value="${n(f[g].ate)}"></div>
             <div class="field"><label>Frete fixo (R$)</label><input class="inp" data-fr="${g}.fixo" inputmode="decimal" value="${n(f[g].fixo)}"></div>
             <div class="field"><label>Acima disso (% das peças)</label><input class="inp" data-fr="${g}.pct" inputmode="decimal" value="${String(f[g].pct).replace(".",",")}"></div>
-            <div class="field"><label>Grátis a partir de (R$)</label><input class="inp" data-fr="${g}.gratis" inputmode="decimal" value="${n(f[g].gratis)}"></div>
+            <div class="field"><label>Grátis a partir de (R$) · 0 = sem frete grátis</label><input class="inp" data-fr="${g}.gratis" inputmode="decimal" value="${n(f[g].gratis)}"></div>
           </div></div>`;
         return lin("a","Regiões",`<div style="display:flex;flex-wrap:wrap;gap:6px 14px">${Object.keys(REGIOES).map(r=>`<label style="display:flex;gap:6px;align-items:center;font-size:13px;cursor:pointer"><input type="checkbox" data-reg="${r}" ${f.regA.includes(r)?"checked":""} style="width:16px;height:16px">${r}</label>`).join("")}</div>`)
           +lin("b","Demais regiões"); })()}
