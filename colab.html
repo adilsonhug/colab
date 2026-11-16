@@ -1636,7 +1636,18 @@ function faixaDe(base){
 // valor em reais digitado com milhar: "150.000,00", "150000" ou "150.000" → 150000
 const numBR=v=>{ let s=String(v??"").replace(/[R$\s]/g,""); if(s.includes(",")) s=s.replace(/\./g,"").replace(",","."); else if(/^\d{1,3}(\.\d{3})+$/.test(s)) s=s.replace(/\./g,""); const n=parseFloat(s); return isNaN(n)?0:n; };
 const pctTxt=n=>(+n||0).toLocaleString("pt-BR",{minimumFractionDigits:1,maximumFractionDigits:2})+"%";
+// só leitura (para quem não é o administrador)
+function verFaixas(){
+  const fs=faixasCom();
+  modal(`<h3>Tabela de comissão por faixa</h3>
+    <div class="hint">Quando as vendas do mês (sem frete) chegam no valor da faixa, o % vale sobre todo o valor vendido no mês. Abaixo da primeira faixa a comissão é 0%.</div>
+    <div class="tw" style="max-height:55vh;overflow:auto"><table style="min-width:0"><thead><tr><th>Venda no mês a partir de</th><th class="num">%</th></tr></thead>
+      <tbody>${fs.map(f=>`<tr><td class="tnum">${brl(f.de)}</td><td class="num tnum"><b>${pctTxt(f.pct)}</b></td></tr>`).join("")||`<tr><td colspan="2" class="hint">Nenhuma faixa cadastrada.</td></tr>`}</tbody></table></div>
+    <div class="hint">Só o administrador altera a tabela.</div>
+    <div class="row"><button class="btn" data-close>Fechar</button></div>`);
+}
 function modalFaixas(){
+  if(!podeEditarCom()) return verFaixas();
   let fs=faixasCom().map(f=>({...f}));
   const desenha=()=>{
     $("#fx_lista").innerHTML=fs.map((f,k)=>`<div style="display:flex;gap:8px;align-items:center">
@@ -1670,10 +1681,12 @@ function modalFaixas(){
     closeModal(); viewComissao(); toast("Tabela de comissão salva.");
   });
 }
+// todos veem a comissão de todos; só o administrador Adilson altera % e tabela
+const podeEditarCom=()=>!!SESSION&&SESSION.role==="admin"&&semAcento(SESSION.name).trim()==="adilson";
 function viewComissao(){
-  const isAdmin=SESSION.role==="admin";
+  const isAdmin=podeEditarCom();
   if(!CMF.ano) CMF.ano=hojeISO().slice(0,4); if(!CMF.mes) CMF.mes=hojeISO().slice(5,7);
-  const lista=USERS.filter(u=>isAdmin?(u.ativo||comissaoDe(u).base>0):u.id===SESSION.id);
+  const lista=USERS.filter(u=>u.ativo||comissaoDe(u).base>0);
   const tot=lista.reduce((s,u)=>s+comissaoDe(u).valor,0);
   const nomeMes=`${MESES_L[+CMF.mes-1]}/${CMF.ano}`;
   const isos=[...VENDAS.filter(v=>v.nova).map(v=>v.dataISO),MES_ATUAL+"-01",hojeISO(),...MESES.map((_,i)=>`${CMF.ano}-${String(i+1).padStart(2,"0")}-01`)].filter(Boolean);
@@ -1682,9 +1695,9 @@ function viewComissao(){
     <div class="card" style="margin-bottom:14px"><div class="card-b" style="padding:10px 14px">
       <div class="datebar" style="align-items:flex-end">${dfHTML("cm",CMF,isos,true)}
         <button class="btn ghost sm" id="cmb_mes" type="button">Este mês</button>
-        ${isAdmin?`<button class="btn ghost sm" id="cmb_fx" type="button">📊 Tabela de comissão</button>`:""}
+        <button class="btn ghost sm" id="cmb_fx" type="button">📊 ${isAdmin?"Tabela de comissão":"Ver tabela de comissão"}</button>
         <span class="chip info" style="margin-left:auto">Mostrando: ${esc(nomeMes)}</span></div></div></div>
-    <div class="card"><div class="card-h"><h3>${isAdmin?"Comissão por vendedor":"Minha comissão"} — ${esc(nomeMes)}</h3><span class="chip good">${brl(tot)}</span></div>
+    <div class="card"><div class="card-h"><h3>Comissão por vendedor — ${esc(nomeMes)}</h3><span class="chip good">${brl(tot)}</span></div>
       <div class="card-b pad0"><div class="tw"><table>
         <thead><tr><th>Vendedor</th><th class="num">Vendas no mês (sem frete)</th><th class="num">% comissão</th><th class="num">Comissão</th></tr></thead>
         <tbody>${lista.map(u=>{const c=comissaoDe(u);return `<tr><td><b>${esc(u.name)}</b><div class="hint">${esc(u.desc)}</div></td>
@@ -1696,11 +1709,11 @@ function viewComissao(){
             ${u.comTab?`<div class="hint">${c.fx.de?`faixa a partir de ${brl(c.fx.de)}`:`abaixo da 1ª faixa`}${c.fx.prox?` · faltam ${brl(c.fx.prox.de-c.base)} para ${pctTxt(c.fx.prox.pct)}`:""}</div>`:""}</td>
           <td class="num tnum" style="font-weight:800">${brl(c.valor)}</td></tr>`;}).join("")}</tbody>
       </table></div></div></div>
-    <div class="hint" style="margin-top:12px">Base = valor líquido (sem frete) das vendas lançadas no sistema no mês escolhido, com o vendedor de cada venda (vendas canceladas não contam)${CMF.ano+"-"+CMF.mes===MES_ATUAL?" + o valor já apurado na planilha de outubro":""}. ${isAdmin?"Em cada vendedor escolha <b>Tabela</b> (% pela faixa de venda do mês) ou <b>% fixo</b>.":""}</div>
+    <div class="hint" style="margin-top:12px">Base = valor líquido (sem frete) das vendas lançadas no sistema no mês escolhido, com o vendedor de cada venda (vendas canceladas não contam)${CMF.ano+"-"+CMF.mes===MES_ATUAL?" + o valor já apurado na planilha de outubro":""}. ${isAdmin?"Em cada vendedor escolha <b>Tabela</b> (% pela faixa de venda do mês) ou <b>% fixo</b>.":"Só o administrador altera o % e a tabela de comissão."}</div>
   </div>`;
   dfBind("cm",()=>CMF,viewComissao);
   $("#cmb_mes").addEventListener("click",()=>{CMF={ano:hojeISO().slice(0,4),mes:hojeISO().slice(5,7),dia:""}; viewComissao();});
-  $("#cmb_fx")?.addEventListener("click",modalFaixas);
+  $("#cmb_fx")?.addEventListener("click",()=>isAdmin?modalFaixas():verFaixas());
   $("#view").querySelectorAll("[data-cmodo]").forEach(x=>x.addEventListener("change",()=>{
     const u=USERS.find(y=>y.id===x.dataset.cmodo); u.comTab=x.value==="tab"; viewComissao();
     toast(u.comTab?`${u.name}: comissão pela tabela de faixas.`:`${u.name}: comissão de ${u.com||0}% fixo.`);}));
@@ -1760,7 +1773,7 @@ function modalUsuario(u){
       <div class="field"><label>Cargo / descrição</label><input class="inp" id="u_desc" value="${esc(u?.desc||"Vendedor")}"></div>
     </div>
     <div class="formrow">
-      <div class="field"><label>Comissão (%)</label><input class="inp" id="u_com" type="number" step="0.1" min="0" value="${u?.com??3}"></div>
+      <div class="field"><label>Comissão (%)</label><input class="inp" id="u_com" type="number" step="0.1" min="0" value="${u?.com??3}" ${podeEditarCom()?"":'disabled title="Só o administrador Adilson altera a comissão"'}></div>
       ${novo?`<div class="field"><label>Senha inicial</label><input class="inp" id="u_pw" type="password" autocomplete="new-password" placeholder="mín. 4 caracteres"></div>`
         :`<div class="field"><label>Situação</label><select class="inp" id="u_ativo"><option value="1">Ativo</option><option value="0" ${u.ativo?"":"selected"}>Inativo (não entra)</option></select></div>`}
     </div>
@@ -1768,7 +1781,7 @@ function modalUsuario(u){
     <div class="row"><button class="btn ghost" data-close>Cancelar</button><button class="btn" id="u_save">${novo?"Criar usuário":"Salvar"}</button></div>`,"wide");
   $("#u_save").addEventListener("click",async()=>{
     const err=t=>$("#u_err").textContent=t;
-    const name=$("#u_nome").value.trim(), role=$("#u_role").value, desc=$("#u_desc").value.trim()||(role==="admin"?"Administrador":"Vendedor"), com=Math.max(0,parseFloat($("#u_com").value)||0);
+    const name=$("#u_nome").value.trim(), role=$("#u_role").value, desc=$("#u_desc").value.trim()||(role==="admin"?"Administrador":"Vendedor"), com=podeEditarCom()?Math.max(0,parseFloat($("#u_com").value)||0):(u?u.com:0);
     if(!name) return err("Informe o nome.");
     if(USERS.some(x=>x!==u&&x.name.toLowerCase()===name.toLowerCase())) return err("Já existe um usuário com esse nome.");
     const ativo=novo?true:$("#u_ativo").value==="1";
