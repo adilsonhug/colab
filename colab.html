@@ -770,7 +770,8 @@ function viewVendas(){
   const q=VF.q.trim();
   const lista=VENDAS.filter(v=>dfMatch(v.dataISO,VF.d)&&(!q||busca(v.desc,q))&&(!VF.vend||v.vend===VF.vend)&&(!VF.tipo||v.tipo===VF.tipo)&&(!VF.pay||pagsDe(v).some(x=>x.pay===VF.pay))&&(!VF.cat||(v.cats||[]).includes(VF.cat)))
     .sort((a,b)=>b.dataISO.localeCompare(a.dataISO)||(b.hora||"").localeCompare(a.hora||"")||b.id-a.id);
-  const totFil=lista.reduce((s,v)=>s+v.valor,0);
+  const totFil=lista.reduce((s,v)=>s+v.valor,0), freteFil=+lista.reduce((s,v)=>s+(+v.frete||0),0).toFixed(2);
+  const tdFrete=f=>`<td class="num tnum" style="color:${+f>0?"#7a4fd1":"var(--muted)"}">${+f>0?brl(+f):"—"}</td>`;
   const ativo=VF.vend||VF.tipo||VF.pay||VF.cat||VF.q||dfAtivo(VF.d);
   // devoluções aparecem na lista, marcadas, mas não somam no total (o faturamento só conta o que o cliente pagou)
   const devs=VF.vend||VF.tipo||(VF.pay&&VF.pay!=="Devolução")?[]:DEVOLUCOES.filter(d=>dfMatch(d.data,VF.d)
@@ -786,14 +787,14 @@ function viewVendas(){
         <td><div style="display:flex;gap:4px;flex-wrap:wrap">${[...new Set(d.itens.map(i=>i.cat).filter(Boolean))].map(c=>`<span class="badge">${esc(c)}</span>`).join("")}</div></td>
         <td>${esc(d.user)}</td>
         <td>${d.destino==="vale"?`<span class="pay"><span class="dot" style="background:#0e8a8a"></span>Vale ${esc(d.cod)}</span>`:`<span class="pay"><span class="dot" style="background:var(--crit)"></span>Dinheiro devolvido</span>`}</td>
-        <td><span class="chip crit">Devolução</span></td>
+        <td><span class="chip crit">Devolução</span></td><td class="num" style="color:var(--muted)">—</td>
         <td class="num tnum" style="color:var(--muted);text-decoration:line-through">${brl(d.valor)}</td></tr>`;
   const linhaCanc=c=>`<tr style="background:var(--surface-2);color:var(--muted)">
         <td class="tnum" style="white-space:nowrap">${fmtDate(c.dataISO)}${c.hora?`<div class="hint">${c.hora}</div>`:""}</td>
         <td style="min-width:220px"><b style="color:var(--crit)">✕ Cancelada</b> · <span style="text-decoration:line-through">${esc(c.desc)}</span>
           <div class="hint">Motivo: ${esc(c.cancelada.motivo)} · por ${esc(c.cancelada.user)} em ${fmtDate(c.cancelada.data)} ${esc(c.cancelada.hora||"")} · não soma no total</div></td>
         <td><div style="display:flex;gap:4px;flex-wrap:wrap">${(c.cats||[]).map(x=>`<span class="badge">${esc(x)}</span>`).join("")}</div></td>
-        <td>${esc(c.vend)}</td><td>${esc(payTxt(c))}</td><td><span class="chip">Cancelada</span></td>
+        <td>${esc(c.vend)}</td><td>${esc(payTxt(c))}</td><td><span class="chip">Cancelada</span></td><td class="num tnum" style="text-decoration:line-through">${+c.frete>0?brl(+c.frete):"—"}</td>
         <td class="num tnum" style="text-decoration:line-through">${brl(c.valor)}</td></tr>`;
   const sel=(id,lbl,opts,val)=>`<div class="field" style="min-width:140px;flex:1"><label>${lbl}</label>${optSel(id,opts,val)}</div>`;
   const porPay=pays.map(p=>[p,lista.reduce((s,v)=>s+pagsDe(v).filter(x=>x.pay===p).reduce((t,x)=>t+x.valor,0),0)]).filter(x=>x[1]>0);
@@ -820,7 +821,7 @@ function viewVendas(){
       ${VF.cat?`<div class="hint">Filtro de categoria mostra as vendas que têm ao menos uma peça de ${esc(VF.cat)}; o valor é o total da venda.</div>`:""}
     </div></div>
     <div class="card"><div class="card-b pad0"><div class="tw"><table>
-      <thead><tr><th>Data</th><th>Descrição</th><th>Categoria</th><th>Vendedor</th><th>Pagamento</th><th>Tipo</th><th class="num">Valor</th></tr></thead>
+      <thead><tr><th>Data</th><th>Descrição</th><th>Categoria</th><th>Vendedor</th><th>Pagamento</th><th>Tipo</th><th class="num">Frete</th><th class="num">Valor</th></tr></thead>
       <tbody>${linhas.length?linhas.map(({v,d,c})=>{ if(d) return linhaDev(d); if(c) return linhaCanc(c); const podeDev=(v.itens||[]).length>0, jaDev=devDaVenda(v).reduce((s,x)=>s+x.qtd,0);
         return `<tr ${podeDev?`data-vdev="${VENDAS.indexOf(v)}" style="cursor:pointer" title="Clique para fazer a devolução / troca desta venda"`:""}>
         <td class="tnum" style="white-space:nowrap">${fmtDate(v.dataISO)}${v.hora?`<div class="hint">${v.hora}</div>`:""}
@@ -830,9 +831,10 @@ function viewVendas(){
         <td>${esc(v.vend)}</td>
         <td>${pagsDe(v).map(x=>`<span class="pay" style="display:flex"><span class="dot" style="background:${payIcon(x.pay)}"></span>${esc(x.pay)}${v.pags?` <span class="tnum" style="font-weight:500;color:var(--muted)">${brl(x.valor)}</span>`:""}</span>`).join("")}</td>
         <td><span class="badge ${v.tipo==='Online'?'onl':v.tipo==='Loja física'?'fis':''}">${esc(v.tipo)}</span></td>
-        <td class="num tnum">${brl(v.valor)}</td></tr>`; }).join("")
-        :`<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:24px">${VF.pay==="Devolução"?"Nenhuma devolução com esses filtros.":"Nenhuma venda com esses filtros."}</td></tr>`}</tbody>
-      <tfoot><tr><td colspan="6" style="text-align:right;font-weight:700;color:var(--muted)">${ativo?"Total filtrado":"Total geral"} (com frete)</td><td class="num tnum" style="font-weight:800">${brl(totFil)}</td></tr></tfoot>
+        ${tdFrete(v.frete)}
+        <td class="num tnum">${brl(v.valor)}${+v.frete>0?`<div class="hint">peças ${brl(v.valor-v.frete)}</div>`:""}</td></tr>`; }).join("")
+        :`<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:24px">${VF.pay==="Devolução"?"Nenhuma devolução com esses filtros.":"Nenhuma venda com esses filtros."}</td></tr>`}</tbody>
+      <tfoot><tr><td colspan="6" style="text-align:right;font-weight:700;color:var(--muted)">${ativo?"Total filtrado":"Total geral"} (com frete)</td><td class="num tnum" style="font-weight:700;color:#7a4fd1">${brl(freteFil)}</td><td class="num tnum" style="font-weight:800">${brl(totFil)}${freteFil?`<div class="hint" style="font-weight:600">sem frete ${brl(totFil-freteFil)}</div>`:""}</td></tr></tfoot>
     </table></div></div></div>
     <div class="hint" style="margin-top:10px">Para lançar uma venda, use a aba “Nova venda”.</div>
   </div>`;
