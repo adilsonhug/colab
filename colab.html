@@ -122,6 +122,14 @@ main{min-width:0;padding:0 0 60px}
 .tiles.compact .tile .val{font-size:19px}
 .tiles.compact .tile .sub{font-size:11px}
 .tiles.compact .chip{font-size:10.5px;padding:2px 7px}
+/* painel: todos os cartões numa linha só em tela larga */
+@media (min-width:1200px){
+  .tiles.uma-linha{grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);grid-template-columns:none;gap:8px}
+  .tiles.uma-linha .tile{padding:9px 10px;min-width:0}
+  .tiles.uma-linha .tile .lbl{font-size:9.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .tiles.uma-linha .tile .val{font-size:clamp(14px,1.25vw,18px);white-space:nowrap}
+  .tiles.uma-linha .tile .sub{font-size:10.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+}
 .tile .sub{font-size:12px;color:var(--muted)}
 .dot{width:8px;height:8px;border-radius:50%;flex:none}
 .chip{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:700;padding:3px 9px;border-radius:999px}
@@ -654,14 +662,14 @@ function viewDash(){
         <button class="btn ghost sm" id="dshb_mes" type="button">Este mês</button>
         <span class="chip info" style="margin-left:auto">Mostrando: ${esc(nomeP)}</span>
       </div></div></div>
-    <div class="tiles compact">
+    <div class="tiles compact uma-linha">
       <div class="tile"><div class="lbl"><span class="dot" style="background:var(--accent)"></span>Faturamento${F.dia?" do dia":F.mes?" do mês":F.ano?" do ano":""}</div>
         <div class="val tnum">${brl(P.tot)}</div><div class="sub">${diasAtivos} dia(s) com venda${P.hist?` · ${brl(P.hist)} do histórico`:""}</div></div>
       <div class="tile"><div class="lbl"><span class="dot" style="background:#7a4fd1"></span>Frete</div>
         <div class="val tnum">${brl(freteP)}</div><div class="sub">${comFrete.length} venda(s) com frete</div></div>
       <div class="tile"><div class="lbl"><span class="dot" style="background:var(--good)"></span>Líquido (sem frete)</div>
         <div class="val tnum">${brl(liquido)}</div><div class="sub">faturamento − frete</div></div>
-      <div class="tile"><div class="lbl"><span class="dot" style="background:var(--good)"></span>Saldo (fat. − despesas)</div>
+      <div class="tile"><div class="lbl"><span class="dot" style="background:var(--good)"></span><span title="Saldo (faturamento − despesas)">Saldo (fat. − desp.)</span></div>
         <div class="val tnum">${brl(saldo)}</div><div class="sub">Despesas: ${brl(despMes)}</div></div>
       <div class="tile"><div class="lbl"><span class="dot" style="background:#3257c5"></span>Ticket médio</div>
         <div class="val tnum">${brl(ticket)}</div><div class="sub">${VD.length} vendas detalhadas</div></div>
