@@ -1614,26 +1614,39 @@ function twoCol(arr,mes=MES_ATUAL.slice(5,7)){
   return rows;
 }
 
-function comissaoDe(u){
-  const base=(COMISSAO.find(c=>c.vend===u.name)?.valor||0)+VENDAS.filter(v=>v.nova&&v.vend===u.name).reduce((s,v)=>s+v.valor,0);
-  return {base,valor:base*(u.com||0)/100};
+// comissão do mês escolhido: vendas lançadas no sistema naquele mês (+ o valor apurado na planilha, só no mês dela)
+let CMF={ano:hojeISO().slice(0,4),mes:hojeISO().slice(5,7),dia:""};
+function comissaoDe(u,f=CMF){
+  const ym=`${f.ano}-${f.mes}`, vs=VENDAS.filter(v=>v.nova&&v.vend===u.name&&dfMatch(v.dataISO,f));
+  const plan=ym===MES_ATUAL?(COMISSAO.find(c=>c.vend===u.name)?.valor||0):0;
+  const base=+(plan+vs.reduce((s,v)=>s+v.valor,0)).toFixed(2);
+  return {base,plan,n:vs.length,valor:base*(u.com||0)/100};
 }
 function viewComissao(){
   const isAdmin=SESSION.role==="admin";
+  if(!CMF.ano) CMF.ano=hojeISO().slice(0,4); if(!CMF.mes) CMF.mes=hojeISO().slice(5,7);
   const lista=USERS.filter(u=>isAdmin?(u.ativo||comissaoDe(u).base>0):u.id===SESSION.id);
   const tot=lista.reduce((s,u)=>s+comissaoDe(u).valor,0);
+  const nomeMes=`${MESES_L[+CMF.mes-1]}/${CMF.ano}`;
+  const isos=[...VENDAS.filter(v=>v.nova).map(v=>v.dataISO),MES_ATUAL+"-01",hojeISO(),...MESES.map((_,i)=>`${CMF.ano}-${String(i+1).padStart(2,"0")}-01`)].filter(Boolean);
   $("#view").innerHTML=`
   <div class="section">
-    <div class="card"><div class="card-h"><h3>${isAdmin?"Comissão por vendedor — outubro":"Minha comissão — outubro"}</h3><span class="chip good">${brl(tot)}</span></div>
+    <div class="card" style="margin-bottom:14px"><div class="card-b" style="padding:10px 14px">
+      <div class="datebar" style="align-items:flex-end">${dfHTML("cm",CMF,isos,true)}
+        <button class="btn ghost sm" id="cm_mes" type="button">Este mês</button>
+        <span class="chip info" style="margin-left:auto">Mostrando: ${esc(nomeMes)}</span></div></div></div>
+    <div class="card"><div class="card-h"><h3>${isAdmin?"Comissão por vendedor":"Minha comissão"} — ${esc(nomeMes)}</h3><span class="chip good">${brl(tot)}</span></div>
       <div class="card-b pad0"><div class="tw"><table>
         <thead><tr><th>Vendedor</th><th class="num">Vendas no mês</th><th class="num">% comissão</th><th class="num">Comissão</th></tr></thead>
         <tbody>${lista.map(u=>{const c=comissaoDe(u);return `<tr><td><b>${esc(u.name)}</b><div class="hint">${esc(u.desc)}</div></td>
-          <td class="num tnum">${brl(c.base)}</td>
+          <td class="num tnum">${brl(c.base)}<div class="hint">${c.n} venda(s)${c.plan?` + ${brl(c.plan)} da planilha`:""}</div></td>
           <td class="num">${isAdmin?`<input class="inp cnt" type="number" step="0.1" min="0" data-com="${u.id}" value="${u.com||0}" style="width:76px"> %`:`${u.com||0}%`}</td>
           <td class="num tnum" style="font-weight:800">${brl(c.valor)}</td></tr>`;}).join("")}</tbody>
       </table></div></div></div>
-    <div class="hint" style="margin-top:12px">Base = vendas do mês já apuradas na planilha + vendas lançadas no sistema. ${isAdmin?"Altere o % direto na tabela ou no painel de usuários.":""}</div>
+    <div class="hint" style="margin-top:12px">Base = vendas lançadas no sistema no mês escolhido, com o vendedor de cada venda (vendas canceladas não contam)${CMF.ano+"-"+CMF.mes===MES_ATUAL?" + o valor já apurado na planilha de outubro":""}. ${isAdmin?"Altere o % direto na tabela ou no painel de usuários.":""}</div>
   </div>`;
+  dfBind("cm",()=>CMF,viewComissao);
+  $("#cm_mes").addEventListener("click",()=>{CMF={ano:hojeISO().slice(0,4),mes:hojeISO().slice(5,7),dia:""}; viewComissao();});
   $("#view").querySelectorAll("[data-com]").forEach(x=>x.addEventListener("change",()=>{
     const u=USERS.find(y=>y.id===x.dataset.com); u.com=Math.max(0,parseFloat(x.value)||0); viewComissao(); toast(`Comissão de ${u.name}: ${u.com}%`);}));
 }
@@ -1667,7 +1680,7 @@ function viewConta(){
   $("#view").querySelectorAll("[data-pw]").forEach(b=>b.addEventListener("click",()=>{const u=USERS.find(x=>x.id===b.dataset.pw);modalSenha(u,u.id===SESSION.id);}));
 }
 function viewMinhaConta(){
-  const c=comissaoDe(SESSION);
+  const c=comissaoDe(SESSION,{ano:hojeISO().slice(0,4),mes:hojeISO().slice(5,7),dia:""}); // mês atual
   $("#view").innerHTML=`
   <div class="section" style="max-width:560px">
     <div class="card"><div class="card-b" style="display:flex;align-items:center;gap:14px">
