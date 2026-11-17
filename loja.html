@@ -276,8 +276,7 @@ addEventListener("keydown",e=>{ if(e.key==="Escape") fecha(); });
 
 function abreProduto(id,tamPre){
   const p=PRODS.find(x=>x.id===id); if(!p) return;
-  // cores na mesma página só quando é o mesmo Modelo (código); sem modelo, cada cor fica sozinha
-  const outras=p.mod?PRODS.filter(x=>x.mod===p.mod):[p];
+  const outras=PRODS.filter(x=>x.nome===p.nome&&x.cat===p.cat);
   const d=disp(p); let tam=tamPre&&d.some(t=>t.t===tamPre)?tamPre:(d.length===1?d[0].t:""), qtd=1;
   const fs=fotosP(p);
   abrePainel(`<div class="ph"><h2>${esc(p.cat||"Produto")}</h2><button class="x" data-fecha aria-label="Fechar">×</button></div>
