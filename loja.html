@@ -704,4 +704,12 @@ salvaSacola();
   setInterval(async()=>{ if($("#host").innerHTML||!$("#pagina").hidden) return; try{ await carregar(); render(); }catch(e){} },60000);
 })();
 </script>
+<!-- Vercel Web Analytics: conta os acessos (painel na Vercel). Página de produto (#p=…) conta como /produto/… -->
+<script>
+window.va=window.va||function(){(window.vaq=window.vaq||[]).push(arguments);};
+window.va("beforeSend",ev=>{ try{ const u=new URL(ev.url), m=/^#p=(.+)$/.exec(u.hash);
+  if(m){ u.pathname="/produto/"+decodeURIComponent(m[1]).replace(/^m:/,"").replace(/[|\s]+/g,"-"); }
+  u.hash=""; return {...ev,url:u.toString()}; }catch(e){ return ev; } });
+</script>
+<script defer src="/_vercel/insights/script.js"></script>
 </body></html>
