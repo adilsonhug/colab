@@ -1141,7 +1141,8 @@ function modalEditarProduto(i){
     $("#e_modhint").innerHTML=ir.length?`Junto com: ${[...new Set(ir.map(x=>`${x.tam}${x.cor?` (${x.cor})`:""}`))].map(esc).join(", ")}`
       :irDesc.length?`Junto pela descrição com: ${[...new Set(irDesc.map(x=>x.tam))].map(esc).join(", ")}`:m?"Nenhum outro tamanho com esse modelo ainda.":""; };
   $("#e_modelo").addEventListener("input",modHint); modHint();
-  const irmaosSemModelo=ESTOQUE.filter(x=>x!==p&&!modeloDe(x)&&modKey(x)===modKey(p));
+  // os outros tamanhos desta mesma peça (mesmo modelo + cor, ou mesma descrição + cor) mudam de modelo junto
+  const irmaosSemModelo=ESTOQUE.filter(x=>x!==p&&modKey(x)===modKey(p));
   const qtdIn=()=>parseInt($("#e_qtd").value);
   $("#e_qtd").addEventListener("input",()=>{$("#e_motbox").hidden=qtdIn()===p.qtd||isNaN(qtdIn());});
   setTimeout(()=>$("#e_nome")?.focus(),50);
@@ -1181,7 +1182,7 @@ function modalEditarProduto(i){
       const kVelha=modKey(p), mudouMod=modeloDe(p)!==d.modelo;
       if(!d.modelo) delete d.modelo;
       Object.assign(p,d); if(!d.modelo) delete p.modelo;
-      // os outros tamanhos que estavam juntos (pela descrição) vão junto para o modelo novo
+      // os outros tamanhos que estavam juntos vão junto para o modelo novo
       let junto=0; if(mudouMod&&d.modelo) irmaosSemModelo.forEach(x=>{ x.modelo=d.modelo; junto++; });
       // fotos e "no site" acompanham o produto quando a chave muda
       const kNova=modKey(p); if(kNova!==kVelha&&LOJA.mod[kVelha]&&!LOJA.mod[kNova]){ LOJA.mod[kNova]=LOJA.mod[kVelha]; if(!ESTOQUE.some(x=>modKey(x)===kVelha)) delete LOJA.mod[kVelha]; }
