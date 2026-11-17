@@ -384,7 +384,7 @@ addEventListener("keydown",e=>{ if(e.key==="Escape") fecha(); });
 
 function abreProduto(id,tamPre,semHist){
   const p=PRODS.find(x=>x.id===id); if(!p) return;
-  if(!semHist){ const h="#p="+encodeURIComponent(id); if(location.hash!==h) history.pushState(null,"",h); }
+  if(!semHist){ const h="#p="+encodeURIComponent(id); if(location.hash!==h){ history.pushState(null,"",h); contaVisita(id); } }
   fecha();
   // cores juntas só quando é o mesmo Modelo (código) no sistema — id "m:MODELO|cor"; sem modelo a peça fica sozinha
   const grupoDe=x=>String(x.id||"").startsWith("m:")?String(x.id).slice(2).split("|")[0]:"";
@@ -707,6 +707,8 @@ salvaSacola();
 <!-- Vercel Web Analytics: conta os acessos (painel na Vercel). Página de produto (#p=…) conta como /produto/… -->
 <script>
 window.va=window.va||function(){(window.vaq=window.vaq||[]).push(arguments);};
+// abrir produto não troca a página, então avisa o contador na mão
+function contaVisita(id){ try{ window.va("pageview",{route:"/produto/[id]",path:"/produto/"+String(id).replace(/^m:/,"").replace(/[|\s]+/g,"-")}); }catch(e){} }
 window.va("beforeSend",ev=>{ try{ const u=new URL(ev.url), m=/^#p=(.+)$/.exec(u.hash);
   if(m){ u.pathname="/produto/"+decodeURIComponent(m[1]).replace(/^m:/,"").replace(/[|\s]+/g,"-"); }
   u.hash=""; return {...ev,url:u.toString()}; }catch(e){ return ev; } });
