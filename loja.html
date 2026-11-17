@@ -386,10 +386,12 @@ function abreProduto(id,tamPre,semHist){
   const p=PRODS.find(x=>x.id===id); if(!p) return;
   if(!semHist){ const h="#p="+encodeURIComponent(id); if(location.hash!==h) history.pushState(null,"",h); }
   fecha();
-  const outras=PRODS.filter(x=>x.nome===p.nome&&x.cat===p.cat);
+  // cores juntas só quando é o mesmo Modelo (código) no sistema — id "m:MODELO|cor"; sem modelo a peça fica sozinha
+  const grupoDe=x=>String(x.id||"").startsWith("m:")?String(x.id).slice(2).split("|")[0]:"";
+  const outras=grupoDe(p)?PRODS.filter(x=>grupoDe(x)===grupoDe(p)):[p];
   const d=disp(p); let tam=tamPre&&d.some(t=>t.t===tamPre)?tamPre:(d.length===1?d[0].t:""), qtd=1;
   const fs=fotosP(p);
-  const parecidos=PRODS.filter(x=>x.id!==p.id&&x.nome!==p.nome&&disp(x).length).sort((a,b)=>(b.cat===p.cat)-(a.cat===p.cat)).slice(0,4);
+  const parecidos=PRODS.filter(x=>!outras.includes(x)&&disp(x).length).sort((a,b)=>(b.cat===p.cat)-(a.cat===p.cat)).slice(0,4);
   const envio=[LOJA.retirada!==false?`Retirada na loja${LOJA.endereco?`: ${LOJA.endereco}`:" sem custo"}.`:"",
     LOJA.entrega?`Entrega com frete calculado pelo CEP na sacola${LOJA.entregaTxt?` (${LOJA.entregaTxt})`:""}.`:"",gratisTxt()?gratisTxt()+".":""].filter(Boolean).join("\n");
   $("#inicio").hidden=true; const pg=$("#pagina"); pg.hidden=false; document.title=`${p.nome} ${p.cor||""} — COLAB Clothing`;
